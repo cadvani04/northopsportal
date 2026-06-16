@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: northops
+      POSTGRES_PASSWORD: northops
+      POSTGRES_DB: northops
+    volumes:
+      - northops_pg:/var/lib/postgresql/data
+
+volumes:
+  northops_pg:

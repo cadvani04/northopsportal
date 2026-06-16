@@ -1,65 +1,142 @@
-import Image from "next/image";
+import {
+  CheckSquare,
+  Package,
+  Receipt,
+  DollarSign,
+  AlertTriangle,
+  TrendingUp,
+  Video,
+} from "lucide-react";
+import { AppShell } from "@/components/layout/app-shell";
+import { StatCard, Card, Badge } from "@/components/ui";
+import {
+  getDashboardStats,
+  getMyTasks,
+  getRecentActivity,
+  getTeamMembers,
+} from "@/lib/queries";
+import { requireAdmin } from "@/lib/auth/session";
+import {
+  formatCurrency,
+  formatRelative,
+  formatDueDate,
+  formatStatus,
+  getInitials,
+} from "@/lib/utils";
 
-export default function Home() {
+export default async function DashboardPage() {
+  const user = await requireAdmin();
+  const [stats, tasks, activity, team] = await Promise.all([
+    getDashboardStats(user.id),
+    getMyTasks(user.id),
+    getRecentActivity(8),
+    getTeamMembers(),
+  ]);
+
+  const myOpenTasks = tasks.filter((t) => t.status !== "DONE").slice(0, 5);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <AppShell>
+      <div className="mb-8">
+        <h1 className="text-2xl font-semibold tracking-tight text-white">
+          Good morning, {user.name.split(" ")[0]}
+        </h1>
+        <p className="mt-1 text-sm text-slate-400">
+          Here&apos;s what&apos;s happening across NorthOps today.
+        </p>
+      </div>
+
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard title="Open Tasks" value={stats.openTasks} subtitle={`${stats.overdueTasks} overdue`} icon={<CheckSquare className="h-5 w-5" />} trendUp={stats.overdueTasks === 0} />
+        <StatCard title="Pending Deliverables" value={stats.pendingDeliverables} icon={<Package className="h-5 w-5" />} />
+        <StatCard title="Unpaid Invoices" value={stats.unpaidInvoices} icon={<Receipt className="h-5 w-5" />} />
+        <StatCard title="Revenue (Paid)" value={formatCurrency(stats.totalRevenue)} icon={<TrendingUp className="h-5 w-5" />} trend={`${stats.activeClients} active clients`} trendUp />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2 space-y-6">
+          <Card>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-white">Your Tasks</h2>
+              <a href="/tasks" className="text-sm text-cyan-400 hover:text-cyan-300">View all →</a>
+            </div>
+            <div className="space-y-3">
+              {myOpenTasks.length === 0 ? (
+                <p className="py-4 text-center text-sm text-slate-500">No open tasks assigned to you</p>
+              ) : (
+                myOpenTasks.map((task) => (
+                  <div key={task.id} className="flex items-center justify-between rounded-lg border border-white/5 bg-white/[0.02] px-4 py-3">
+                    <div>
+                      <p className="text-sm font-medium text-white">{task.title}</p>
+                      {task.project && <p className="text-xs text-slate-500">{task.project.client.company}</p>}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {task.dueDate && <span className="text-xs text-slate-400">{formatDueDate(task.dueDate)}</span>}
+                      <Badge status={task.status}>{formatStatus(task.status)}</Badge>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </Card>
+          <Card>
+            <h2 className="mb-4 text-lg font-semibold text-white">Team</h2>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {team.map((member) => (
+                <div key={member.id} className="rounded-lg border border-white/5 bg-white/[0.02] p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-700 text-xs font-semibold text-white">
+                      {getInitials(member.name)}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-white">{member.name}</p>
+                      <p className="text-xs capitalize text-slate-500">{member.role.toLowerCase()}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        <div className="space-y-6">
+          {stats.overdueTasks > 0 && (
+            <Card className="border-red-500/20 bg-red-500/5">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-red-400" />
+                <p className="text-sm text-red-300">{stats.overdueTasks} overdue task(s)</p>
+              </div>
+            </Card>
+          )}
+          <Card>
+            <div className="mb-4 flex items-center gap-2">
+              <DollarSign className="h-4 w-4 text-slate-400" />
+              <h2 className="text-sm font-semibold text-white">Pending Expenses</h2>
+            </div>
+            <p className="text-2xl font-semibold text-white">{formatCurrency(stats.pendingExpenses)}</p>
+          </Card>
+          <Card>
+            <div className="mb-4 flex items-center gap-2">
+              <Video className="h-4 w-4 text-slate-400" />
+              <h2 className="text-sm font-semibold text-white">Meetings This Week</h2>
+            </div>
+            <p className="text-2xl font-semibold text-white">{stats.recentMeetings}</p>
+          </Card>
+          <Card>
+            <h2 className="mb-4 text-sm font-semibold text-white">Recent Activity</h2>
+            <div className="space-y-3">
+              {activity.map((item) => (
+                <div key={item.id} className="flex gap-3">
+                  <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-400" />
+                  <div>
+                    <p className="text-xs font-medium text-slate-300">{item.title}</p>
+                    <p className="mt-0.5 text-xs text-slate-600">{formatRelative(item.createdAt)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
         </div>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }

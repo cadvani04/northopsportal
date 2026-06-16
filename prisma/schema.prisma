@@ -1,0 +1,268 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum Role {
+  ADMIN
+  TEAM
+  CLIENT
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+  BLOCKED
+}
+
+enum DeliverableStatus {
+  PLANNED
+  IN_PROGRESS
+  REVIEW
+  DELIVERED
+  APPROVED
+}
+
+enum AgreementStatus {
+  DRAFT
+  SENT
+  SIGNED
+  EXPIRED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum ExpenseStatus {
+  PENDING
+  APPROVED
+  REIMBURSED
+  REJECTED
+}
+
+enum ActivityType {
+  TASK_CREATED
+  TASK_UPDATED
+  TASK_DELETED
+  DELIVERABLE_UPDATED
+  INVOICE_SENT
+  INVOICE_PAID
+  MEETING_SYNCED
+  AGREEMENT_SIGNED
+  EXPENSE_SUBMITTED
+  EXPENSE_APPROVED
+  COMMENT
+  SYSTEM
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         Role     @default(TEAM)
+  avatar       String?
+  clientId     String?
+  client       Client?  @relation(fields: [clientId], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  assignedTasks Task[]         @relation("TaskAssignee")
+  createdTasks  Task[]         @relation("TaskCreator")
+  expenses      Expense[]
+  activities    ActivityLog[]
+  notifications Notification[]
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String?
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Client {
+  id        String   @id @default(cuid())
+  name      String
+  company   String
+  email     String
+  phone     String?
+  logo      String?
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users      User[]
+  projects   Project[]
+  agreements Agreement[]
+  invoices   Invoice[]
+  meetings   Meeting[]
+  activities ActivityLog[]
+}
+
+model Project {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  clientId    String
+  client      Client    @relation(fields: [clientId], references: [id])
+  status      String    @default("active")
+  startDate   DateTime?
+  endDate     DateTime?
+  budget      Float?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tasks          Task[]
+  deliverables   Deliverable[]
+  expenses       Expense[]
+  timelineEvents TimelineEvent[]
+}
+
+model Task {
+  id              String     @id @default(cuid())
+  title           String
+  description     String?
+  status          TaskStatus @default(TODO)
+  priority        String     @default("medium")
+  dueDate         DateTime?
+  projectId       String?
+  project         Project?   @relation(fields: [projectId], references: [id])
+  assigneeId      String?
+  assignee        User?      @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  createdById     String?
+  createdBy       User?      @relation("TaskCreator", fields: [createdById], references: [id])
+  isClientVisible Boolean    @default(false)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+
+model Deliverable {
+  id          String            @id @default(cuid())
+  title       String
+  description String?
+  status      DeliverableStatus @default(PLANNED)
+  dueDate     DateTime?
+  deliveredAt DateTime?
+  projectId   String
+  project     Project           @relation(fields: [projectId], references: [id])
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+model Agreement {
+  id          String          @id @default(cuid())
+  title       String
+  description String?
+  status      AgreementStatus @default(DRAFT)
+  value       Float?
+  startDate   DateTime?
+  endDate     DateTime?
+  signedAt    DateTime?
+  documentUrl String?
+  clientId    String
+  client      Client          @relation(fields: [clientId], references: [id])
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model Invoice {
+  id        String        @id @default(cuid())
+  number    String        @unique
+  status    InvoiceStatus @default(DRAFT)
+  amount    Float
+  tax       Float         @default(0)
+  total     Float
+  dueDate   DateTime?
+  paidAt    DateTime?
+  notes     String?
+  clientId  String
+  client    Client        @relation(fields: [clientId], references: [id])
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  lineItems InvoiceLineItem[]
+}
+
+model InvoiceLineItem {
+  id          String  @id @default(cuid())
+  description String
+  quantity    Float   @default(1)
+  unitPrice   Float
+  total       Float
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model Expense {
+  id            String        @id @default(cuid())
+  title         String
+  description   String?
+  amount        Float
+  category      String
+  status        ExpenseStatus @default(PENDING)
+  date          DateTime
+  receiptUrl    String?
+  projectId     String?
+  project       Project?      @relation(fields: [projectId], references: [id])
+  submittedById String
+  submittedBy   User          @relation(fields: [submittedById], references: [id])
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model Meeting {
+  id           String   @id @default(cuid())
+  firefliesId  String?  @unique
+  title        String
+  date         DateTime
+  duration     Int?
+  participants String?
+  summary      String?
+  actionItems  String?
+  transcript   String?
+  recordingUrl String?
+  clientId     String?
+  client       Client?  @relation(fields: [clientId], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model TimelineEvent {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  date        DateTime
+  type        String   @default("milestone")
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model ActivityLog {
+  id          String       @id @default(cuid())
+  type        ActivityType
+  title       String
+  description String?
+  metadata    String?
+  clientId    String?
+  client      Client?      @relation(fields: [clientId], references: [id])
+  userId      String?
+  user        User?        @relation(fields: [userId], references: [id])
+  createdAt   DateTime     @default(now())
+}

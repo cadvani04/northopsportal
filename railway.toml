@@ -1,0 +1,9 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "node server.js"
+healthcheckPath = "/api/webhooks/fireflies"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
