@@ -1,11 +1,9 @@
 import "dotenv/config";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
 import bcrypt from "bcryptjs";
 
-const adapter = new PrismaBetterSqlite3({
-  url: process.env.DATABASE_URL || "file:./prisma/dev.db",
-});
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
 
 const DEFAULT_PASSWORD = "northops123";
@@ -53,19 +51,11 @@ async function main() {
     data: [
       { title: "Finalize wireframes for patient dashboard", status: "IN_PROGRESS", priority: "high", dueDate: new Date("2026-06-18"), projectId: projects[0].id, assigneeId: alex.id, createdById: curran.id, isClientVisible: true },
       { title: "Review HIPAA compliance checklist", status: "TODO", priority: "high", dueDate: new Date("2026-06-20"), projectId: projects[0].id, assigneeId: curran.id, createdById: curran.id },
-      { title: "Set up GPS integration API", status: "IN_PROGRESS", priority: "high", projectId: projects[1].id, assigneeId: morgan.id, createdById: curran.id, isClientVisible: true },
     ],
   });
 
-  await prisma.deliverable.createMany({
-    data: [
-      { title: "UX Research Report", status: "APPROVED", projectId: projects[0].id },
-      { title: "Patient Dashboard MVP", status: "IN_PROGRESS", dueDate: new Date("2026-07-01"), projectId: projects[0].id },
-    ],
-  });
-
-  await prisma.agreement.create({ data: { title: "MSA — Meridian Health", status: "SIGNED", value: 85000, clientId: clients[0].id, signedAt: new Date("2025-12-15") } });
-
+  await prisma.deliverable.create({ data: { title: "Patient Dashboard MVP", status: "IN_PROGRESS", dueDate: new Date("2026-07-01"), projectId: projects[0].id } });
+  await prisma.agreement.create({ data: { title: "MSA — Meridian Health", status: "SIGNED", value: 85000, clientId: clients[0].id } });
   await prisma.invoice.create({
     data: {
       number: "INV-2026-0042", status: "PAID", amount: 21250, tax: 0, total: 21250, clientId: clients[0].id,
@@ -73,11 +63,8 @@ async function main() {
     },
   });
 
-  await prisma.expense.create({ data: { title: "Figma Enterprise", amount: 45, category: "Software", status: "PENDING", date: new Date(), submittedById: alex.id } });
-
   console.log("Seed complete! Password:", DEFAULT_PASSWORD);
   console.log("  Admin:  curran@northops.io");
-  console.log("  Client: sarah.chen@meridianhealth.com");
 }
 
 main().catch(console.error).finally(() => prisma.$disconnect());
