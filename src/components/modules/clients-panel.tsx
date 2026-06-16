@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { Modal, Button, Input, Select } from "@/components/ui/forms";
 import { createClient, updateClient, deleteClient, createClientUser } from "@/lib/actions";
-import { formatCurrency } from "@/lib/utils";
 
 type Client = {
   id: string;
@@ -22,6 +21,7 @@ export function ClientsPanel({ clients }: { clients: Client[] }) {
   const [open, setOpen] = useState(false);
   const [userOpen, setUserOpen] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const edit = editId ? clients.find((c) => c.id === editId) : null;
 
@@ -55,8 +55,34 @@ export function ClientsPanel({ clients }: { clients: Client[] }) {
     });
   }
 
+  function handleDelete(client: Client) {
+    const detail =
+      client._count.projects + client._count.invoices + client._count.agreements;
+    const warning =
+      detail > 0
+        ? `Delete ${client.company}? This will also remove ${client._count.projects} project(s), ${client._count.invoices} invoice(s), and ${client._count.agreements} agreement(s).`
+        : `Delete ${client.company}?`;
+
+    if (!confirm(warning)) return;
+
+    setDeleteError(null);
+    startTransition(async () => {
+      const result = await deleteClient(client.id);
+      if (!result.ok) {
+        setDeleteError(result.error ?? "Could not delete client.");
+        return;
+      }
+      router.refresh();
+    });
+  }
+
   return (
     <>
+      {deleteError && (
+        <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {deleteError}
+        </div>
+      )}
       <div className="mb-6 flex justify-end">
         <Button onClick={() => { setEditId(null); setOpen(true); }}><Plus className="h-4 w-4" /> New Client</Button>
       </div>
@@ -70,7 +96,7 @@ export function ClientsPanel({ clients }: { clients: Client[] }) {
               </div>
               <div className="flex gap-1">
                 <button onClick={() => { setEditId(c.id); setOpen(true); }} className="text-slate-400 hover:text-white"><Pencil className="h-4 w-4" /></button>
-                <button onClick={() => confirm("Delete client?") && startTransition(async () => { await deleteClient(c.id); router.refresh(); })} className="text-slate-400 hover:text-red-400"><Trash2 className="h-4 w-4" /></button>
+                <button onClick={() => handleDelete(c)} className="text-slate-400 hover:text-red-400"><Trash2 className="h-4 w-4" /></button>
               </div>
             </div>
             <p className="text-sm text-slate-400">{c.email}</p>
@@ -90,7 +116,17 @@ export function ClientsPanel({ clients }: { clients: Client[] }) {
           <Input label="Company" name="company" required defaultValue={edit?.company} />
           <Input label="Email" name="email" type="email" required defaultValue={edit?.email} />
           <Input label="Phone" name="phone" defaultValue={edit?.phone ?? ""} />
-          <Select label="Status" name="status" options={[{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }]} defaultValue={edit?.status ?? "active"} />
+          <Select label="Status" name="status" options={[
+            { value: "active", label: "Active client" },
+            { value: "implementation", label: "Implementation" },
+            { value: "committed", label: "Committed (unconfirmed)" },
+            { value: "prospect-advanced", label: "Advanced prospect" },
+            { value: "prospect", label: "Prospect" },
+            { value: "closed-lost", label: "Closed lost" },
+            { value: "legacy-marketing", label: "Legacy marketing" },
+            { value: "internal", label: "Internal" },
+            { value: "inactive", label: "Inactive" },
+          ]} defaultValue={edit?.status ?? "active"} />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
             <Button type="submit" disabled={pending}>Save</Button>

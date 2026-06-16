@@ -212,9 +212,66 @@ export async function updateClient(
 
 export async function deleteClient(id: string) {
   await requireAdmin();
-  await db.client.delete({ where: { id } });
-  revalidateAll();
-  return { ok: true };
+
+  try {
+    await db.$transaction(async (tx) => {
+      const projects = await tx.project.findMany({
+        where: { clientId: id },
+        select: { id: true },
+      });
+      const projectIds = projects.map((p) => p.id);
+
+      if (projectIds.length > 0) {
+        await tx.task.deleteMany({ where: { projectId: { in: projectIds } } });
+        await tx.deliverable.deleteMany({ where: { projectId: { in: projectIds } } });
+        await tx.expense.deleteMany({ where: { projectId: { in: projectIds } } });
+        await tx.timelineEvent.deleteMany({ where: { projectId: { in: projectIds } } });
+        await tx.project.deleteMany({ where: { clientId: id } });
+      }
+
+      await tx.invoice.deleteMany({ where: { clientId: id } });
+      await tx.agreement.deleteMany({ where: { clientId: id } });
+      await tx.meeting.deleteMany({ where: { clientId: id } });
+      await tx.activityLog.deleteMany({ where: { clientId: id } });
+
+      const linkedUsers = await tx.user.findMany({
+        where: { clientId: id },
+        select: { id: true },
+      });
+      const userIds = linkedUsers.map((u) => u.id);
+
+      if (userIds.length > 0) {
+        await tx.expense.deleteMany({ where: { submittedById: { in: userIds } } });
+        await tx.task.updateMany({
+          where: { assigneeId: { in: userIds } },
+          data: { assigneeId: null },
+        });
+        await tx.task.updateMany({
+          where: { createdById: { in: userIds } },
+          data: { createdById: null },
+        });
+        await tx.activityLog.updateMany({
+          where: { userId: { in: userIds } },
+          data: { userId: null },
+        });
+        await tx.user.deleteMany({ where: { clientId: id } });
+      }
+
+      await tx.client.delete({ where: { id } });
+    });
+
+    revalidateAll();
+    return { ok: true as const };
+  } catch (error) {
+    console.error("deleteClient failed:", error);
+    return {
+      ok: false as const,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Could not delete client. Remove linked records or try again.",
+    };
+  }
 }
 
 // ─── Projects ────────────────────────────────────────────────────────────────
