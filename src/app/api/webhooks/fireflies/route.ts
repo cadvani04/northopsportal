@@ -12,7 +12,10 @@ interface FirefliesActionItem {
 
 interface FirefliesPayload {
   meetingId?: string;
+  meeting_id?: string;
   id?: string;
+  event?: string;
+  eventType?: string;
   title?: string;
   date?: string;
   duration?: number;
@@ -27,6 +30,17 @@ interface FirefliesPayload {
   recording_url?: string;
   client_email?: string;
   organizer_email?: string;
+}
+
+function resolveFirefliesId(payload: FirefliesPayload) {
+  return payload.meetingId || payload.meeting_id || payload.id || null;
+}
+
+function resolveMeetingTitle(payload: FirefliesPayload, firefliesId: string) {
+  if (payload.title) return payload.title;
+  if (payload.eventType) return payload.eventType;
+  if (payload.event) return `Fireflies: ${payload.event.replace(/\./g, " ")}`;
+  return `Fireflies meeting ${firefliesId}`;
 }
 
 function extractActionItems(summary: FirefliesPayload["summary"]): string | null {
@@ -79,7 +93,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const payload: FirefliesPayload = await request.json();
-    const firefliesId = payload.meetingId || payload.id;
+    const firefliesId = resolveFirefliesId(payload);
 
     if (!firefliesId) {
       return NextResponse.json({ error: "Missing meeting ID" }, { status: 400 });
@@ -106,7 +120,7 @@ export async function POST(request: NextRequest) {
     const meeting = await db.meeting.create({
       data: {
         firefliesId,
-        title: payload.title || "Untitled Meeting",
+        title: resolveMeetingTitle(payload, firefliesId),
         date: payload.date ? new Date(payload.date) : new Date(),
         duration: payload.duration,
         participants: participantsStr,
