@@ -8,6 +8,11 @@ function isVercelBlobUrl(url: string) {
   return url.includes(".public.blob.vercel-storage.com");
 }
 
+/** Vercel Blob: legacy token or newer store + OIDC (BLOB_STORE_ID). */
+function isBlobStorageAvailable() {
+  return !!(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID);
+}
+
 export async function uploadFile(
   storagePath: string,
   file: File,
@@ -38,7 +43,7 @@ export async function uploadFile(
 
   const filename = file.name.replace(/[^\w.\-]+/g, "_") || "file";
 
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
+  if (isBlobStorageAvailable()) {
     const blob = await put(`${storagePath}/${filename}`, buffer, {
       access: "public",
       contentType: file.type || "application/octet-stream",
