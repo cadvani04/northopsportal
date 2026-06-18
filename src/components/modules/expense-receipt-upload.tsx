@@ -45,7 +45,7 @@ export function ExpenseReceiptUpload({ expenseId, receiptUrl, onChange }: Props)
     return (
       <div className="flex items-center gap-2">
         <a
-          href={receiptUrl}
+          href={`/api/expenses/${expenseId}/receipt/view`}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300"

@@ -1,16 +1,26 @@
-import { mkdir, writeFile, unlink } from "fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "fs/promises";
 import path from "path";
-import { del, put } from "@vercel/blob";
+import { del, get, put } from "@vercel/blob";
 
 const MAX_BYTES = 4 * 1024 * 1024;
 
-function isVercelBlobUrl(url: string) {
-  return url.includes(".public.blob.vercel-storage.com");
+export function isVercelBlobUrl(url: string) {
+  return url.includes(".blob.vercel-storage.com");
 }
 
 /** Vercel Blob: legacy token or newer store + OIDC (BLOB_STORE_ID). */
 function isBlobStorageAvailable() {
   return !!(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID);
+}
+
+function guessContentType(filePath: string) {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === ".pdf") return "application/pdf";
+  if (ext === ".png") return "image/png";
+  if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
+  if (ext === ".webp") return "image/webp";
+  if (ext === ".gif") return "image/gif";
+  return "application/octet-stream";
 }
 
 export async function uploadFile(
@@ -45,7 +55,7 @@ export async function uploadFile(
 
   if (isBlobStorageAvailable()) {
     const blob = await put(`${storagePath}/${filename}`, buffer, {
-      access: "public",
+      access: "private",
       contentType: file.type || "application/octet-stream",
       addRandomSuffix: true,
     });
@@ -79,6 +89,31 @@ export async function deleteStoredFile(documentUrl: string, localPrefix?: string
       /* ignore */
     }
   }
+}
+
+export async function readStoredFile(storedUrl: string) {
+  if (isVercelBlobUrl(storedUrl)) {
+    const result = await get(storedUrl, { access: "private" });
+    if (!result || result.statusCode === 304 || !result.stream) {
+      throw new Error("File not found");
+    }
+
+    return {
+      body: result.stream,
+      contentType: result.blob.contentType || "application/octet-stream",
+    };
+  }
+
+  if (storedUrl.startsWith("/uploads/")) {
+    const filePath = path.join(process.cwd(), "public", storedUrl);
+    const buffer = await readFile(filePath);
+    return {
+      body: buffer,
+      contentType: guessContentType(filePath),
+    };
+  }
+
+  throw new Error("Unsupported file location");
 }
 
 export const RECEIPT_TYPES = [

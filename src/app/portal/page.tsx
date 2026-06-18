@@ -108,7 +108,7 @@ export default async function ClientPortalPage() {
               </div>
               {a.value && <p className="mt-1 text-xs text-slate-500">{formatCurrency(a.value)}</p>}
               {a.status === "SIGNED" && a.documentUrl && (
-                <a href={a.documentUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex text-xs text-cyan-400 hover:text-cyan-300">
+                <a href={`/api/agreements/${a.id}/document/view`} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex text-xs text-cyan-400 hover:text-cyan-300">
                   View signed agreement (PDF)
                 </a>
               )}

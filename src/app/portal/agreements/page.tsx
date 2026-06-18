@@ -20,7 +20,7 @@ export default async function PortalAgreementsPage() {
             </div>
             {a.value && <p className="mt-2 text-sm text-slate-500">{formatCurrency(a.value)}</p>}
             {a.status === "SIGNED" && a.documentUrl && (
-              <a href={a.documentUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex text-sm text-cyan-400">
+              <a href={`/api/agreements/${a.id}/document/view`} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex text-sm text-cyan-400">
                 View signed agreement (PDF)
               </a>
             )}

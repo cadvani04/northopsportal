@@ -60,7 +60,7 @@ export function AgreementDocumentUpload({ agreementId, documentUrl, onChange }: 
       {documentUrl ? (
         <div className="flex flex-wrap items-center gap-2">
           <a
-            href={documentUrl}
+            href={`/api/agreements/${agreementId}/document/view`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-300 hover:bg-cyan-500/20"
