@@ -37,13 +37,9 @@ npm run dev
 
 Open http://localhost:3000
 
-## Demo logins
+## Logins
 
-| Role | Email | Password |
-|------|-------|----------|
-| Admin | curran@northops.io | northops123 |
-| Team | alex@northops.io | northops123 |
-| Client (SKAPS) | kush.vyas@skaps.com | northops123 |
+Admin portal users are seeded via `npm run db:seed` (curran@northops.io, kayden@northops.io, chaavan@northops.io). Share credentials securely — they are not shown on the login page.
 
 ## What's built
 
@@ -120,6 +116,6 @@ ngrok http 3000
 npm run dev          # Dev server
 npm run build        # Production build
 npm run db:migrate   # Run migrations
-npm run db:seed      # Seed demo data
+npm run db:seed      # Seed NorthOps data + admin users
 npm run db:setup     # Docker + migrate + seed
 ```

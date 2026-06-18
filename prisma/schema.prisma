@@ -64,6 +64,37 @@ enum ActivityType {
   EXPENSE_APPROVED
   COMMENT
   SYSTEM
+  OUTREACH_LOGGED
+  STAGE_CHANGED
+  CONTACT_ADDED
+}
+
+enum PipelineStage {
+  COLD_OUTREACH
+  DISCOVERY
+  PROPOSAL
+  NEGOTIATION
+  COMMITTED
+  ACTIVE
+  CLOSED_LOST
+}
+
+enum OutreachChannel {
+  LINKEDIN
+  EMAIL
+  CALL
+  TEXT
+  IN_PERSON
+  OTHER
+}
+
+enum OutreachOutcome {
+  SENT
+  OPENED
+  REPLIED
+  NO_RESPONSE
+  MEETING_BOOKED
+  NOT_INTERESTED
 }
 
 model User {
@@ -86,6 +117,8 @@ model User {
   notifications   Notification[]
   clientRequests  ClientRequest[] @relation("RequestSubmitter")
   routedRequests  ClientRequest[] @relation("RequestAssignee")
+  ownedClients    Client[]        @relation("ClientOwner")
+  outreachTouches OutreachTouch[]
 }
 
 model Notification {
@@ -100,23 +133,69 @@ model Notification {
 }
 
 model Client {
+  id            String         @id @default(cuid())
+  name          String
+  company       String
+  email         String
+  phone         String?
+  logo          String?
+  status        String         @default("active")
+  pipelineStage PipelineStage  @default(DISCOVERY)
+  ownerId       String?
+  owner         User?          @relation("ClientOwner", fields: [ownerId], references: [id])
+  source        String?
+  industry      String?
+  dealValue     Float?
+  probability   Int            @default(0)
+  nextFollowUp  DateTime?
+  notes         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  users           User[]
+  projects        Project[]
+  agreements      Agreement[]
+  invoices        Invoice[]
+  meetings        Meeting[]
+  activities      ActivityLog[]
+  requests        ClientRequest[]
+  contacts        Contact[]
+  outreachTouches OutreachTouch[]
+}
+
+model Contact {
   id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   name      String
-  company   String
-  email     String
+  title     String?
+  email     String?
   phone     String?
-  logo      String?
-  status    String   @default("active")
+  linkedin  String?
+  isPrimary Boolean  @default(false)
+  notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users      User[]
-  projects   Project[]
-  agreements Agreement[]
-  invoices   Invoice[]
-  meetings   Meeting[]
-  activities ActivityLog[]
-  requests   ClientRequest[]
+  outreachTouches OutreachTouch[]
+}
+
+model OutreachTouch {
+  id           String          @id @default(cuid())
+  clientId     String
+  client       Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  contactId    String?
+  contact      Contact?        @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  channel      OutreachChannel
+  subject      String?
+  notes        String?
+  outcome      OutreachOutcome @default(SENT)
+  touchedAt    DateTime        @default(now())
+  nextFollowUp DateTime?
+  ownerId      String?
+  owner        User?           @relation(fields: [ownerId], references: [id])
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
 }
 
 model Project {

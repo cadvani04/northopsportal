@@ -3,48 +3,67 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
 import bcrypt from "bcryptjs";
 import { seedNorthopsData } from "./seed-northops";
+import { seedSalesCrmData } from "./seed-sales";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
 
 const DEFAULT_PASSWORD = "northops123";
 
-async function ensureAdminUser() {
-  const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
-  return prisma.user.upsert({
-    where: { email: "curran@northops.io" },
-    create: {
-      email: "curran@northops.io",
-      name: "Curran Advani",
-      role: "ADMIN",
-      teamRole: "sales",
-      passwordHash,
-    },
-    update: {
-      name: "Curran Advani",
-      role: "ADMIN",
-      teamRole: "sales",
-    },
-  });
-}
+const MOCK_USER_EMAILS = ["alex@northops.io", "morgan@northops.io"];
 
-async function ensureTeamUsers() {
+const NORTHOPS_ADMINS = [
+  { email: "curran@northops.io", name: "Curran Advani", teamRole: "sales" },
+  { email: "kayden@northops.io", name: "Kayden", teamRole: "sales" },
+  { email: "chaavan@northops.io", name: "Chaavan", teamRole: "dev" },
+] as const;
+
+async function ensureNorthOpsAdmins() {
   const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
-  for (const user of [
-    { email: "alex@northops.io", name: "Alex Rivera", teamRole: "dev" },
-    { email: "morgan@northops.io", name: "Morgan Lee", teamRole: "fulfillment" },
-  ]) {
+
+  for (const user of NORTHOPS_ADMINS) {
     await prisma.user.upsert({
       where: { email: user.email },
       create: {
         email: user.email,
         name: user.name,
-        role: "TEAM",
+        role: "ADMIN",
         teamRole: user.teamRole,
         passwordHash,
       },
-      update: { name: user.name, role: "TEAM", teamRole: user.teamRole },
+      update: {
+        name: user.name,
+        role: "ADMIN",
+        teamRole: user.teamRole,
+      },
     });
+  }
+
+  return prisma.user.findUniqueOrThrow({ where: { email: "curran@northops.io" } });
+}
+
+async function removeMockUsers() {
+  const curran = await prisma.user.findUnique({ where: { email: "curran@northops.io" } });
+  if (!curran) return;
+
+  for (const email of MOCK_USER_EMAILS) {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) continue;
+
+    await prisma.task.updateMany({ where: { assigneeId: user.id }, data: { assigneeId: curran.id } });
+    await prisma.task.updateMany({ where: { createdById: user.id }, data: { createdById: curran.id } });
+    await prisma.notification.updateMany({ where: { userId: user.id }, data: { userId: curran.id } });
+    await prisma.clientRequest.updateMany({ where: { assigneeId: user.id }, data: { assigneeId: curran.id } });
+    await prisma.clientRequest.updateMany({ where: { submittedById: user.id }, data: { submittedById: null } });
+    await prisma.expense.updateMany({ where: { submittedById: user.id }, data: { submittedById: curran.id } });
+    await prisma.activityLog.updateMany({ where: { userId: user.id }, data: { userId: curran.id } });
+
+    try {
+      await prisma.user.delete({ where: { id: user.id } });
+      console.log("Removed mock user:", email);
+    } catch {
+      console.warn("Could not remove mock user (still referenced):", email);
+    }
   }
 }
 
@@ -122,11 +141,12 @@ async function seedDefaultKpis() {
 async function main() {
   console.log("Seeding NorthOps dashboard (idempotent — existing records preserved)...");
 
-  const admin = await ensureAdminUser();
-  await ensureTeamUsers();
-  console.log("Admin user ready:", admin.email);
+  const admin = await ensureNorthOpsAdmins();
+  await removeMockUsers();
+  console.log("Admin users ready:", NORTHOPS_ADMINS.map((u) => u.email).join(", "));
 
   const counts = await seedNorthopsData(prisma, admin.id);
+  const salesCounts = await seedSalesCrmData(prisma);
   await ensurePortalUsers();
   await seedDefaultKpis();
 
@@ -141,10 +161,11 @@ async function main() {
   console.log(`  Deliverables:     ${counts.deliverables}`);
   console.log(`  Timeline events:  ${counts.timelineEvents}`);
   console.log(`  Activities:       ${counts.activities}`);
-  console.log("\nLogin: curran@northops.io /", DEFAULT_PASSWORD);
-  console.log("Client portal: kush.vyas@skaps.com /", DEFAULT_PASSWORD);
-  console.log("\nUncertain statuses preserved for: TFP (prospect), Nielsen (committed), Mynt (prospect).");
-  console.log("Only SKAPS marked as signed/active client.");
+  console.log(`  CRM accounts:     ${salesCounts.accounts}`);
+  console.log(`  CRM contacts:     ${salesCounts.contacts}`);
+  console.log(`  Outreach touches: ${salesCounts.touches}`);
+  console.log("\nAdmin portal: curran@northops.io, kayden@northops.io, chaavan@northops.io");
+  console.log("Initial password (change after first login):", DEFAULT_PASSWORD);
 }
 
 main()

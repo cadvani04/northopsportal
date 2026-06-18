@@ -28,6 +28,7 @@ function revalidateAll() {
     "/portal",
     "/requests",
     "/kpis",
+    "/sales",
   ];
   paths.forEach((p) => revalidatePath(p));
 }
@@ -247,6 +248,8 @@ export async function deleteClient(id: string) {
       await tx.meeting.deleteMany({ where: { clientId: id } });
       await tx.activityLog.deleteMany({ where: { clientId: id } });
       await tx.clientRequest.deleteMany({ where: { clientId: id } });
+      await tx.contact.deleteMany({ where: { clientId: id } });
+      await tx.outreachTouch.deleteMany({ where: { clientId: id } });
 
       const linkedUsers = await tx.user.findMany({
         where: { clientId: id },

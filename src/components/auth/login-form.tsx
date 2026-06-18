@@ -93,25 +93,6 @@ export function LoginForm() {
             </button>
           </form>
         </div>
-
-        {/* Demo accounts */}
-        <div className="mt-6 rounded-xl border border-white/5 bg-white/[0.02] p-4">
-          <p className="mb-3 text-xs font-medium uppercase tracking-wider text-slate-500">Demo accounts</p>
-          <div className="space-y-2 text-xs text-slate-400">
-            <div className="flex justify-between gap-4">
-              <span className="shrink-0 text-slate-300">Admin</span>
-              <span className="text-right">curran@northops.io / northops123</span>
-            </div>
-            <div className="flex justify-between gap-4">
-              <span className="shrink-0 text-slate-300">Team</span>
-              <span className="text-right">alex@northops.io / northops123</span>
-            </div>
-            <div className="flex justify-between gap-4">
-              <span className="shrink-0 text-slate-300">Client (SKAPS)</span>
-              <span className="text-right">kush.vyas@skaps.com / northops123</span>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );
