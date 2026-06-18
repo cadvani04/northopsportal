@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { FirefliesSyncButton } from "@/components/modules/fireflies-sync-button";
+import { MeetingReprocessButton } from "@/components/modules/meeting-reprocess-button";
 import { requireAdmin } from "@/lib/auth/session";
 import { getMeetings } from "@/lib/queries";
 import { formatDateTime, parseMeetingActionItems } from "@/lib/utils";
@@ -34,7 +35,7 @@ export default async function MeetingsPage() {
 
             return (
               <Card key={meeting.id}>
-                <div className="mb-4 flex items-start justify-between">
+                <div className="mb-4 flex items-start justify-between gap-3">
                   <div>
                     <h3 className="text-lg font-medium text-white">{meeting.title}</h3>
                     <p className="mt-1 text-sm text-slate-400">
@@ -42,8 +43,17 @@ export default async function MeetingsPage() {
                       {meeting.duration && ` · ${meeting.duration} min`}
                     </p>
                     {meeting.client && <p className="mt-1 text-sm text-slate-500">{meeting.client.company}</p>}
+                    {!meeting.client && (
+                      <p className="mt-1 text-sm text-amber-500/80">No client matched — check participant emails</p>
+                    )}
+                    {!meeting.transcript && (
+                      <p className="mt-1 text-sm text-amber-500/80">No transcript yet — click Extract tasks</p>
+                    )}
                   </div>
-                  <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-xs text-cyan-400">Fireflies + AI</span>
+                  <div className="flex flex-col items-end gap-2">
+                    <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-xs text-cyan-400">Fireflies + AI</span>
+                    <MeetingReprocessButton meetingId={meeting.id} />
+                  </div>
                 </div>
                 {meeting.summary && (
                   <div className="mb-4">

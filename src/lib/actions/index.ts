@@ -808,15 +808,12 @@ export async function processInboundEmail(data: {
     }
   }
 
-  const { findAssigneeForCategory, normalizeEmailCategory } = await import("@/lib/routing");
+  const { findAssigneeForCategory, normalizeEmailCategory, findActiveProjectForClient } = await import("@/lib/routing");
   const category = normalizeEmailCategory(data.subject, data.body);
   const assigneeId = await findAssigneeForCategory(db, category);
 
   const project = client
-    ? await db.project.findFirst({
-        where: { clientId: client.id, status: { in: ["active", "implementation"] } },
-        orderBy: { updatedAt: "desc" },
-      })
+    ? await findActiveProjectForClient(db, client.id)
     : null;
 
   if (!client || !project) {

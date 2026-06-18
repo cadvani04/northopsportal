@@ -27,6 +27,16 @@ export async function findAssigneeForCategory(
   return admin?.id ?? null;
 }
 
+export async function findActiveProjectForClient(
+  db: { project: { findFirst: (args: object) => Promise<{ id: string } | null> } },
+  clientId: string
+) {
+  return db.project.findFirst({
+    where: { clientId, status: { in: ["active", "implementation"] } },
+    orderBy: { updatedAt: "desc" },
+  });
+}
+
 export function normalizeEmailCategory(subject: string, body: string): string {
   const text = `${subject} ${body}`.toLowerCase();
   if (text.includes("bug") || text.includes("broken") || text.includes("error")) return "bug";

@@ -2,6 +2,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/lib/db";
 import { logActivity, notifyClientUsers, notifyTeam } from "@/lib/activity";
 import { emailMeetingSynced, emailTeamNotification } from "@/lib/email";
+import { meetingSourceMarker } from "@/lib/client-matching";
+import { findActiveProjectForClient } from "@/lib/routing";
 
 export interface MeetingExtraction {
   tasks: Array<{
@@ -107,6 +109,23 @@ function extractRuleBased(
   };
 }
 
+function findAssignee(
+  team: Array<{ id: string; name: string; teamRole: string | null }>,
+  assigneeName?: string
+) {
+  if (!assigneeName) return null;
+  const lower = assigneeName.toLowerCase();
+
+  const byName = team.find((user) => {
+    const parts = user.name.toLowerCase().split(/\s+/);
+    return parts.some((part) => part.length > 2 && lower.includes(part));
+  });
+  if (byName) return byName;
+
+  const byRole = team.find((user) => user.teamRole && lower.includes(user.teamRole));
+  return byRole ?? null;
+}
+
 export async function processMeeting(params: {
   meetingId: string;
   title: string;
@@ -117,16 +136,19 @@ export async function processMeeting(params: {
   adminUserId: string | null;
   skipNotifications?: boolean;
 }) {
+  const marker = meetingSourceMarker(params.meetingId);
   const extraction =
     (params.transcript && (await extractWithAI(params.transcript, params.title))) ||
     extractRuleBased(params.summary, params.actionItemsJson);
 
-  const team = await db.user.findMany({ where: { role: { in: ["ADMIN", "TEAM"] } } });
+  const team = await db.user.findMany({
+    where: { role: { in: ["ADMIN", "TEAM"] } },
+    select: { id: true, name: true, email: true, teamRole: true },
+  });
+
   let projectId: string | null = null;
   if (params.clientId) {
-    const project = await db.project.findFirst({
-      where: { clientId: params.clientId, status: "active" },
-    });
+    const project = await findActiveProjectForClient(db, params.clientId);
     projectId = project?.id ?? null;
   }
 
@@ -135,13 +157,11 @@ export async function processMeeting(params: {
   let eventsCreated = 0;
 
   for (const task of extraction.tasks) {
-    const assignee = team.find((u) =>
-      task.assignee?.toLowerCase().includes(u.name.split(" ")[0].toLowerCase())
-    );
+    const assignee = findAssignee(team, task.assignee ?? undefined);
     await db.task.create({
       data: {
         title: task.title,
-        description: "Auto-created from meeting",
+        description: `${marker} Auto-created from meeting`,
         status: "TODO",
         priority: task.priority || "medium",
         dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
@@ -155,26 +175,30 @@ export async function processMeeting(params: {
   }
 
   if (projectId) {
-    for (const d of extraction.deliverables) {
+    for (const deliverable of extraction.deliverables) {
       await db.deliverable.create({
         data: {
-          title: d.title,
-          description: d.description,
+          title: deliverable.title,
+          description: deliverable.description
+            ? `${marker} ${deliverable.description}`
+            : `${marker} From meeting: ${params.title}`,
           status: "PLANNED",
-          dueDate: d.dueDate ? new Date(d.dueDate) : undefined,
+          dueDate: deliverable.dueDate ? new Date(deliverable.dueDate) : undefined,
           projectId,
         },
       });
       deliverablesCreated++;
     }
 
-    for (const e of extraction.timelineEvents) {
+    for (const event of extraction.timelineEvents) {
       await db.timelineEvent.create({
         data: {
-          title: e.title,
-          description: e.description,
-          date: new Date(e.date),
-          type: e.type || "milestone",
+          title: event.title,
+          description: event.description
+            ? `${marker} ${event.description}`
+            : `${marker} From meeting: ${params.title}`,
+          date: new Date(event.date),
+          type: event.type || "milestone",
           projectId,
         },
       });
@@ -214,13 +238,22 @@ export async function processMeeting(params: {
       }
     }
 
-    const teamEmails = team.map((u) => u.email);
+    const teamEmails = team.map((user) => user.email);
     await emailTeamNotification({
       emails: teamEmails,
       subject: `Meeting synced: ${params.title}`,
       body: `Created ${tasksCreated} tasks, ${deliverablesCreated} deliverables, ${eventsCreated} timeline events.`,
     });
   }
+
+  await logActivity({
+    type: "MEETING_SYNCED",
+    title: `Meeting AI extraction: ${params.title}`,
+    description: `${tasksCreated} tasks, ${deliverablesCreated} deliverables, ${eventsCreated} events`,
+    clientId: params.clientId ?? undefined,
+    userId: params.adminUserId ?? undefined,
+    metadata: { meetingId: params.meetingId, tasksCreated, deliverablesCreated, eventsCreated },
+  });
 
   return { tasksCreated, deliverablesCreated, eventsCreated, usedAI: !!getClaudeApiKey() };
 }

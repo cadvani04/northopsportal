@@ -2,6 +2,10 @@ import { db } from "@/lib/db";
 import { logActivity } from "@/lib/activity";
 import { processMeeting } from "@/lib/ai/meeting-processor";
 import {
+  matchClientFromParticipants,
+  meetingSourceMarker,
+} from "@/lib/client-matching";
+import {
   extractActionItemsJson,
   extractTranscriptText,
   getFirefliesTranscript,
@@ -9,34 +13,22 @@ import {
   type FirefliesTranscript,
 } from "@/lib/fireflies/client";
 
-async function matchClientFromParticipants(
+async function fetchFullTranscript(transcript: FirefliesTranscript) {
+  if (!process.env.FIREFLIES_API_KEY || !transcript.id) return transcript;
+
+  const detail = await getFirefliesTranscript(transcript.id);
+  if (!detail) return transcript;
+
+  return { ...transcript, ...detail };
+}
+
+async function resolveClientId(
   participants: string[] | string | undefined,
-  organizerEmail?: string
-): Promise<string | null> {
-  const emails: string[] = [];
-  if (typeof participants === "string") {
-    emails.push(...participants.split(",").map((p) => p.trim()));
-  } else if (Array.isArray(participants)) {
-    emails.push(...participants);
-  }
-  if (organizerEmail) emails.push(organizerEmail);
-
-  for (const email of emails) {
-    const match = email.match(/[\w.-]+@[\w.-]+\.\w+/);
-    if (!match) continue;
-    const client = await db.client.findFirst({
-      where: { email: match[0] },
-    });
-    if (client) return client.id;
-
-    const user = await db.user.findUnique({
-      where: { email: match[0] },
-      select: { clientId: true },
-    });
-    if (user?.clientId) return user.clientId;
-  }
-
-  return null;
+  organizerEmail?: string,
+  existingClientId?: string | null
+) {
+  if (existingClientId) return existingClientId;
+  return matchClientFromParticipants(db, participants, organizerEmail);
 }
 
 export async function syncFirefliesTranscript(
@@ -59,15 +51,11 @@ export async function syncFirefliesTranscript(
   }
 
   let full = transcript;
-  if (options?.fetchDetails !== false && !transcript.sentences?.length) {
-    const detail = await getFirefliesTranscript(firefliesId);
-    if (detail) full = { ...transcript, ...detail };
+  if (options?.fetchDetails !== false) {
+    full = await fetchFullTranscript(transcript);
   }
 
-  const clientId = await matchClientFromParticipants(
-    full.participants,
-    full.organizer_email
-  );
+  const clientId = await resolveClientId(full.participants, full.organizer_email);
   const actionItems = extractActionItemsJson(full.summary);
   const transcriptText = extractTranscriptText(full);
   const admin = await db.user.findFirst({ where: { role: "ADMIN" } });
@@ -123,6 +111,141 @@ export async function syncFirefliesTranscript(
     title: meeting.title,
     ...processing,
   };
+}
+
+export async function reprocessMeeting(
+  meetingId: string,
+  options?: { force?: boolean; skipNotifications?: boolean }
+) {
+  const meeting = await db.meeting.findUnique({ where: { id: meetingId } });
+  if (!meeting) {
+    throw new Error("Meeting not found");
+  }
+
+  const marker = meetingSourceMarker(meetingId);
+  const existingTasks = await db.task.count({
+    where: { description: { contains: marker } },
+  });
+
+  if (existingTasks > 0 && !options?.force) {
+    return {
+      status: "skipped" as const,
+      meetingId,
+      reason: "already_processed",
+      tasksCreated: 0,
+      deliverablesCreated: 0,
+      eventsCreated: 0,
+      usedAI: false,
+    };
+  }
+
+  let transcript = meeting.transcript;
+  let summary = meeting.summary;
+  let actionItems = meeting.actionItems;
+  let clientId = meeting.clientId;
+  let participants = meeting.participants;
+
+  if (meeting.firefliesId) {
+    const detail = await fetchFullTranscript({ id: meeting.firefliesId });
+    if (detail) {
+      transcript = extractTranscriptText(detail) ?? transcript;
+      summary = detail.summary?.overview ?? summary;
+      actionItems = extractActionItemsJson(detail.summary) ?? actionItems;
+      participants = participantsToString(detail.participants) ?? participants;
+      clientId = await resolveClientId(detail.participants, detail.organizer_email, clientId);
+    }
+  }
+
+  if (!clientId && participants) {
+    clientId = await matchClientFromParticipants(db, participants);
+  }
+
+  await db.meeting.update({
+    where: { id: meetingId },
+    data: {
+      transcript,
+      summary,
+      actionItems,
+      participants,
+      clientId: clientId ?? undefined,
+    },
+  });
+
+  if (options?.force) {
+    await db.task.deleteMany({ where: { description: { contains: marker } } });
+    await db.deliverable.deleteMany({ where: { description: { contains: marker } } });
+    await db.timelineEvent.deleteMany({ where: { description: { contains: marker } } });
+  }
+
+  const admin = await db.user.findFirst({ where: { role: "ADMIN" } });
+  const processing = await processMeeting({
+    meetingId,
+    title: meeting.title,
+    summary,
+    transcript,
+    actionItemsJson: actionItems,
+    clientId,
+    adminUserId: admin?.id ?? null,
+    skipNotifications: options?.skipNotifications,
+  });
+
+  return {
+    status: "processed" as const,
+    meetingId,
+    clientId,
+    ...processing,
+  };
+}
+
+export async function reprocessAllIncompleteMeetings(options?: { force?: boolean }) {
+  const meetings = await db.meeting.findMany({
+    orderBy: { date: "desc" },
+  });
+
+  const results = {
+    total: meetings.length,
+    processed: 0,
+    skipped: 0,
+    errors: [] as string[],
+    tasksCreated: 0,
+    deliverablesCreated: 0,
+  };
+
+  for (const meeting of meetings) {
+    const marker = meetingSourceMarker(meeting.id);
+    const hasTasks = await db.task.count({
+      where: { description: { contains: marker } },
+    });
+    const needsWork =
+      options?.force ||
+      !meeting.transcript ||
+      !meeting.clientId ||
+      hasTasks === 0;
+
+    if (!needsWork) {
+      results.skipped++;
+      continue;
+    }
+
+    try {
+      const result = await reprocessMeeting(meeting.id, {
+        force: options?.force,
+        skipNotifications: true,
+      });
+      if (result.status === "skipped") {
+        results.skipped++;
+      } else {
+        results.processed++;
+        results.tasksCreated += result.tasksCreated;
+        results.deliverablesCreated += result.deliverablesCreated;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      results.errors.push(`${meeting.title}: ${message}`);
+    }
+  }
+
+  return results;
 }
 
 export async function syncFirefliesDateRange(fromDate: Date, toDate: Date) {

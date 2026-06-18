@@ -17,11 +17,13 @@ async function ensureAdminUser() {
       email: "curran@northops.io",
       name: "Curran Advani",
       role: "ADMIN",
+      teamRole: "sales",
       passwordHash,
     },
     update: {
       name: "Curran Advani",
       role: "ADMIN",
+      teamRole: "sales",
     },
   });
 }
