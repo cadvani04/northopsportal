@@ -776,23 +776,35 @@ export async function processInboundEmail(data: {
   to: string;
   subject: string;
   body: string;
+  clientId?: string;
 }) {
-  const emailMatch = data.from.match(/[\w.-]+@[\w.-]+\.\w+/);
-  const fromEmail = emailMatch?.[0]?.toLowerCase();
-  if (!fromEmail) {
+  const { parseSenderEmail } = await import("@/lib/inbound-email");
+  const fromEmail = parseSenderEmail(data.from);
+  if (!fromEmail && !data.clientId) {
     throw new Error("Could not parse sender email");
   }
 
-  let client = await db.client.findFirst({
-    where: { email: { equals: fromEmail, mode: "insensitive" } },
-  });
-  if (!client) {
-    const portalUser = await db.user.findUnique({
-      where: { email: fromEmail },
-      select: { clientId: true },
+  let client = data.clientId
+    ? await db.client.findUnique({ where: { id: data.clientId } })
+    : null;
+  if (data.clientId && !client) {
+    throw new Error("Client not found");
+  }
+
+  const senderLabel = fromEmail ?? data.from;
+
+  if (!client && fromEmail) {
+    client = await db.client.findFirst({
+      where: { email: { equals: fromEmail, mode: "insensitive" } },
     });
-    if (portalUser?.clientId) {
-      client = await db.client.findUnique({ where: { id: portalUser.clientId } });
+    if (!client) {
+      const portalUser = await db.user.findUnique({
+        where: { email: fromEmail },
+        select: { clientId: true },
+      });
+      if (portalUser?.clientId) {
+        client = await db.client.findUnique({ where: { id: portalUser.clientId } });
+      }
     }
   }
 
@@ -811,10 +823,10 @@ export async function processInboundEmail(data: {
     if (!client) {
       await notifyTeam({
         title: "Inbound email (unknown sender)",
-        message: `${data.subject} from ${fromEmail}`,
+        message: `${data.subject} from ${senderLabel}`,
         link: "/requests",
       });
-      throw new Error(`No client matched for ${fromEmail}`);
+      throw new Error(`No client matched for ${senderLabel}`);
     }
 
     const request = await db.clientRequest.create({
@@ -886,20 +898,42 @@ export async function processInboundEmail(data: {
 
   await notifyTeam({
     title: "Email → deliverable created",
-    message: `${data.subject} from ${fromEmail}`,
+    message: `${data.subject} from ${senderLabel}`,
     link: "/deliverables",
   });
 
   await logActivity({
     type: "DELIVERABLE_UPDATED",
     title: `Email deliverable: ${data.subject}`,
-    description: `From ${fromEmail}`,
+    description: `From ${senderLabel}`,
     clientId: client.id,
     metadata: { requestId: request.id, deliverableId: deliverable.id },
   });
 
   revalidateAll();
   return { ok: true, requestId: request.id, deliverableId: deliverable.id, matched: true };
+}
+
+export async function logEmailRequest(data: {
+  clientId: string;
+  from: string;
+  subject: string;
+  body: string;
+}) {
+  await requireStaff();
+  try {
+    const result = await processInboundEmail({
+      from: data.from,
+      to: process.env.INBOUND_EMAIL_ADDRESS || "dev@northops.org",
+      subject: data.subject,
+      body: data.body,
+      clientId: data.clientId,
+    });
+    return { ok: true as const, requestId: result.requestId, deliverableId: result.deliverableId, matched: result.matched };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not log email";
+    return { ok: false as const, error: message };
+  }
 }
 
 // ─── KPI goals ───────────────────────────────────────────────────────────────
