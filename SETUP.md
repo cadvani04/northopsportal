@@ -43,7 +43,7 @@ Open http://localhost:3000
 |------|-------|----------|
 | Admin | curran@northops.io | northops123 |
 | Team | alex@northops.io | northops123 |
-| Client | sarah.chen@meridianhealth.com | northops123 |
+| Client (SKAPS) | kush.vyas@skaps.com | northops123 |
 
 ## What's built
 

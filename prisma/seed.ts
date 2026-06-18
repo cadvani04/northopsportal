@@ -26,6 +26,50 @@ async function ensureAdminUser() {
   });
 }
 
+async function ensureTeamUsers() {
+  const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
+  for (const user of [
+    { email: "alex@northops.io", name: "Alex Rivera", teamRole: "dev" },
+    { email: "morgan@northops.io", name: "Morgan Lee", teamRole: "fulfillment" },
+  ]) {
+    await prisma.user.upsert({
+      where: { email: user.email },
+      create: {
+        email: user.email,
+        name: user.name,
+        role: "TEAM",
+        teamRole: user.teamRole,
+        passwordHash,
+      },
+      update: { name: user.name, role: "TEAM", teamRole: user.teamRole },
+    });
+  }
+}
+
+async function ensurePortalUsers() {
+  const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
+  const skaps = await prisma.client.findFirst({
+    where: { company: { contains: "SKAPS", mode: "insensitive" } },
+  });
+  if (!skaps) return;
+
+  await prisma.user.upsert({
+    where: { email: "kush.vyas@skaps.com" },
+    create: {
+      email: "kush.vyas@skaps.com",
+      name: "Kush Vyas",
+      role: "CLIENT",
+      clientId: skaps.id,
+      passwordHash,
+    },
+    update: {
+      name: "Kush Vyas",
+      role: "CLIENT",
+      clientId: skaps.id,
+    },
+  });
+}
+
 async function seedDefaultKpis() {
   const existing = await prisma.kpiGoal.count();
   if (existing > 0) return;
@@ -77,9 +121,11 @@ async function main() {
   console.log("Seeding NorthOps dashboard (idempotent — existing records preserved)...");
 
   const admin = await ensureAdminUser();
+  await ensureTeamUsers();
   console.log("Admin user ready:", admin.email);
 
   const counts = await seedNorthopsData(prisma, admin.id);
+  await ensurePortalUsers();
   await seedDefaultKpis();
 
   console.log("\nNorthOps seed complete.");
@@ -94,6 +140,7 @@ async function main() {
   console.log(`  Timeline events:  ${counts.timelineEvents}`);
   console.log(`  Activities:       ${counts.activities}`);
   console.log("\nLogin: curran@northops.io /", DEFAULT_PASSWORD);
+  console.log("Client portal: kush.vyas@skaps.com /", DEFAULT_PASSWORD);
   console.log("\nUncertain statuses preserved for: TFP (prospect), Nielsen (committed), Mynt (prospect).");
   console.log("Only SKAPS marked as signed/active client.");
 }
