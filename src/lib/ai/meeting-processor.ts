@@ -98,6 +98,7 @@ export async function processMeeting(params: {
   actionItemsJson: string | null;
   clientId: string | null;
   adminUserId: string | null;
+  skipNotifications?: boolean;
 }) {
   const extraction =
     (params.transcript && (await extractWithAI(params.transcript, params.title))) ||
@@ -171,36 +172,38 @@ export async function processMeeting(params: {
     });
   }
 
-  await notifyTeam({
-    title: "Meeting processed",
-    message: `${params.title}: ${tasksCreated} tasks, ${deliverablesCreated} deliverables, ${eventsCreated} timeline events`,
-    link: "/meetings",
-  });
-
-  if (params.clientId) {
-    await notifyClientUsers(params.clientId, {
-      title: "New meeting notes available",
-      message: params.title,
-      link: "/portal",
+  if (!params.skipNotifications) {
+    await notifyTeam({
+      title: "Meeting processed",
+      message: `${params.title}: ${tasksCreated} tasks, ${deliverablesCreated} deliverables, ${eventsCreated} timeline events`,
+      link: "/meetings",
     });
 
-    const client = await db.client.findUnique({ where: { id: params.clientId } });
-    if (client) {
-      await emailMeetingSynced({
-        clientEmail: client.email,
-        clientName: client.name,
-        meetingTitle: params.title,
-        summary: extraction.summary,
+    if (params.clientId) {
+      await notifyClientUsers(params.clientId, {
+        title: "New meeting notes available",
+        message: params.title,
+        link: "/portal",
       });
-    }
-  }
 
-  const teamEmails = team.map((u) => u.email);
-  await emailTeamNotification({
-    emails: teamEmails,
-    subject: `Meeting synced: ${params.title}`,
-    body: `Created ${tasksCreated} tasks, ${deliverablesCreated} deliverables, ${eventsCreated} timeline events.`,
-  });
+      const client = await db.client.findUnique({ where: { id: params.clientId } });
+      if (client) {
+        await emailMeetingSynced({
+          clientEmail: client.email,
+          clientName: client.name,
+          meetingTitle: params.title,
+          summary: extraction.summary,
+        });
+      }
+    }
+
+    const teamEmails = team.map((u) => u.email);
+    await emailTeamNotification({
+      emails: teamEmails,
+      subject: `Meeting synced: ${params.title}`,
+      body: `Created ${tasksCreated} tasks, ${deliverablesCreated} deliverables, ${eventsCreated} timeline events.`,
+    });
+  }
 
   return { tasksCreated, deliverablesCreated, eventsCreated, usedAI: !!process.env.OPENAI_API_KEY };
 }

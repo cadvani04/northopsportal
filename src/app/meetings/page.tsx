@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
+import { FirefliesSyncButton } from "@/components/modules/fireflies-sync-button";
 import { requireAdmin } from "@/lib/auth/session";
 import { getMeetings } from "@/lib/queries";
 import { formatDateTime } from "@/lib/utils";
@@ -15,8 +16,11 @@ export default async function MeetingsPage() {
         title="Meetings"
         description="Notes synced from Fireflies with AI-powered task and deliverable extraction."
         action={
-          <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-xs text-cyan-300">
-            Webhook: POST /api/webhooks/fireflies
+          <div className="flex flex-col items-end gap-3 sm:flex-row sm:items-center">
+            <FirefliesSyncButton />
+            <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-xs text-cyan-300">
+              Webhook: POST /api/webhooks/fireflies
+            </div>
           </div>
         }
       />

@@ -10,6 +10,8 @@
     "lint": "eslint",
     "db:migrate": "prisma migrate dev",
     "db:seed": "npx tsx prisma/seed.ts",
+    "db:seed:northops": "npx tsx prisma/seed.ts",
+    "fireflies:sync": "npx tsx scripts/fireflies-sync.ts",
     "db:reset": "prisma migrate reset --force",
     "db:setup": "docker compose up -d && prisma migrate dev && npm run db:seed",
     "postinstall": "prisma generate"
@@ -18,6 +20,7 @@
     "@prisma/adapter-better-sqlite3": "^7.8.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "@vercel/blob": "^2.4.0",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.10.1",
     "clsx": "^2.1.1",
