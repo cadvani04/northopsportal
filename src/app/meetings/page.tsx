@@ -3,7 +3,7 @@ import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { FirefliesSyncButton } from "@/components/modules/fireflies-sync-button";
 import { requireAdmin } from "@/lib/auth/session";
 import { getMeetings } from "@/lib/queries";
-import { formatDateTime } from "@/lib/utils";
+import { formatDateTime, parseMeetingActionItems } from "@/lib/utils";
 import { Video } from "lucide-react";
 
 export default async function MeetingsPage() {
@@ -30,9 +30,7 @@ export default async function MeetingsPage() {
       ) : (
         <div className="space-y-6">
           {meetings.map((meeting) => {
-            const actionItems = meeting.actionItems
-              ? (JSON.parse(meeting.actionItems) as Array<{ task: string; assignee: string; due?: string }>)
-              : [];
+            const actionItems = parseMeetingActionItems(meeting.actionItems);
 
             return (
               <Card key={meeting.id}>

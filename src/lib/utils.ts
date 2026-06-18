@@ -64,3 +64,46 @@ export const statusColors: Record<string, string> = {
 export function formatStatus(status: string): string {
   return status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
+
+export type MeetingActionItem = {
+  task: string;
+  assignee: string;
+  due?: string | null;
+};
+
+/** Parse meeting actionItems — supports JSON arrays and legacy plain-text seed data. */
+export function parseMeetingActionItems(raw: string | null | undefined): MeetingActionItem[] {
+  if (!raw?.trim()) return [];
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.map((item) => {
+      if (typeof item === "string") {
+        return { task: item, assignee: "Unassigned" };
+      }
+      if (item && typeof item === "object") {
+        const record = item as { task?: string; text?: string; assignee?: string; due?: string | null };
+        return {
+          task: record.task || record.text || "Untitled action item",
+          assignee: record.assignee || "Unassigned",
+          due: record.due,
+        };
+      }
+      return { task: String(item), assignee: "Unassigned" };
+    });
+  } catch {
+    return raw
+      .split(";")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((task) => ({ task, assignee: "Unassigned" }));
+  }
+}
+
+export function formatActionItemsJson(items: string[]): string {
+  return JSON.stringify(
+    items.map((task) => ({ task, assignee: "Unassigned", due: null }))
+  );
+}
