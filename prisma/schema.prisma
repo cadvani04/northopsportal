@@ -72,17 +72,20 @@ model User {
   name         String
   passwordHash String
   role         Role     @default(TEAM)
+  teamRole     String?  // sales | dev | ops | fulfillment | india
   avatar       String?
   clientId     String?
   client       Client?  @relation(fields: [clientId], references: [id])
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  assignedTasks Task[]         @relation("TaskAssignee")
-  createdTasks  Task[]         @relation("TaskCreator")
-  expenses      Expense[]
-  activities    ActivityLog[]
-  notifications Notification[]
+  assignedTasks   Task[]          @relation("TaskAssignee")
+  createdTasks    Task[]          @relation("TaskCreator")
+  expenses        Expense[]
+  activities      ActivityLog[]
+  notifications   Notification[]
+  clientRequests  ClientRequest[] @relation("RequestSubmitter")
+  routedRequests  ClientRequest[] @relation("RequestAssignee")
 }
 
 model Notification {
@@ -113,6 +116,7 @@ model Client {
   invoices   Invoice[]
   meetings   Meeting[]
   activities ActivityLog[]
+  requests   ClientRequest[]
 }
 
 model Project {
@@ -132,6 +136,7 @@ model Project {
   deliverables   Deliverable[]
   expenses       Expense[]
   timelineEvents TimelineEvent[]
+  requests       ClientRequest[]
 }
 
 model Task {
@@ -265,4 +270,39 @@ model ActivityLog {
   userId      String?
   user        User?        @relation(fields: [userId], references: [id])
   createdAt   DateTime     @default(now())
+}
+
+model ClientRequest {
+  id            String   @id @default(cuid())
+  title         String
+  description   String?
+  category      String   @default("general")
+  status        String   @default("open")
+  source        String   @default("portal")
+  clientId      String
+  client        Client   @relation(fields: [clientId], references: [id])
+  projectId     String?
+  project       Project? @relation(fields: [projectId], references: [id])
+  submittedById String?
+  submittedBy   User?    @relation("RequestSubmitter", fields: [submittedById], references: [id])
+  assigneeId    String?
+  assignee      User?    @relation("RequestAssignee", fields: [assigneeId], references: [id])
+  taskId        String?
+  deliverableId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model KpiGoal {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  target      Float
+  current     Float     @default(0)
+  unit        String    @default("count")
+  period      String
+  startDate   DateTime
+  endDate     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }

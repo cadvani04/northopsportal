@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/lib/db";
 import { logActivity, notifyClientUsers, notifyTeam } from "@/lib/activity";
 import { emailMeetingSynced, emailTeamNotification } from "@/lib/email";
@@ -33,30 +33,47 @@ Return valid JSON only with this shape:
   "deliverables": [{ "title": "", "dueDate": "YYYY-MM-DD or null", "description": "" }],
   "timelineEvents": [{ "title": "", "date": "YYYY-MM-DD", "type": "milestone|deadline|event", "description": "" }]
 }
-Only include items clearly discussed. Prefer actionable items.`;
+Only include items clearly discussed. Prefer actionable items. Return JSON only — no markdown fences or commentary.`;
+
+function getClaudeApiKey() {
+  return process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || null;
+}
+
+function getClaudeModel() {
+  return process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514";
+}
+
+function parseJsonResponse(raw: string): MeetingExtraction {
+  const trimmed = raw.trim();
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+  const jsonText = fenced ? fenced[1] : trimmed;
+  return JSON.parse(jsonText) as MeetingExtraction;
+}
 
 async function extractWithAI(transcript: string, title: string): Promise<MeetingExtraction | null> {
-  if (!process.env.OPENAI_API_KEY) return null;
+  const apiKey = getClaudeApiKey();
+  if (!apiKey) return null;
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const anthropic = new Anthropic({ apiKey });
   const content = transcript.slice(0, 12000);
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    response_format: { type: "json_object" },
+  const response = await anthropic.messages.create({
+    model: getClaudeModel(),
+    max_tokens: 4096,
+    temperature: 0.2,
+    system: SYSTEM_PROMPT,
     messages: [
-      { role: "system", content: SYSTEM_PROMPT },
       {
         role: "user",
         content: `Meeting: ${title}\n\nTranscript:\n${content}`,
       },
     ],
-    temperature: 0.2,
   });
 
-  const raw = response.choices[0]?.message?.content;
-  if (!raw) return null;
-  return JSON.parse(raw) as MeetingExtraction;
+  const block = response.content.find((part) => part.type === "text");
+  if (!block || block.type !== "text") return null;
+
+  return parseJsonResponse(block.text);
 }
 
 function extractRuleBased(
@@ -205,5 +222,5 @@ export async function processMeeting(params: {
     });
   }
 
-  return { tasksCreated, deliverablesCreated, eventsCreated, usedAI: !!process.env.OPENAI_API_KEY };
+  return { tasksCreated, deliverablesCreated, eventsCreated, usedAI: !!getClaudeApiKey() };
 }

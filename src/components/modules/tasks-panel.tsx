@@ -6,7 +6,8 @@ import { Plus, Pencil, Trash2 } from "lucide-react";
 import { Modal, Button, Input, Select, Checkbox } from "@/components/ui/forms";
 import { Badge } from "@/components/ui";
 import { createTask, updateTask, deleteTask } from "@/lib/actions";
-import { formatDueDate, formatStatus } from "@/lib/utils";
+import { TaskCheckbox } from "@/components/modules/task-checkbox";
+import { formatDueDate, formatStatus, cn } from "@/lib/utils";
 
 type Task = {
   id: string;
@@ -74,6 +75,7 @@ export function TasksPanel({ tasks, projects, team }: Props) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-white/10 text-left text-xs text-slate-500">
+              <th className="w-10 px-4 py-3" />
               <th className="px-4 py-3">Task</th>
               <th className="px-4 py-3">Project</th>
               <th className="px-4 py-3">Assignee</th>
@@ -83,16 +85,30 @@ export function TasksPanel({ tasks, projects, team }: Props) {
             </tr>
           </thead>
           <tbody>
-            {tasks.map((task) => (
-              <tr key={task.id} className="border-b border-white/5 hover:bg-white/[0.02]">
-                <td className="px-4 py-3 font-medium text-white">{task.title}</td>
+            {tasks.map((task) => {
+              const done = task.status === "DONE";
+              return (
+              <tr
+                key={task.id}
+                className={cn(
+                  "border-b border-white/5 hover:bg-white/[0.02]",
+                  done && "opacity-60"
+                )}
+              >
+                <td className="px-4 py-3">
+                  <TaskCheckbox taskId={task.id} completed={done} size="sm" />
+                </td>
+                <td className={cn("px-4 py-3 font-medium text-white", done && "line-through text-slate-500")}>
+                  {task.title}
+                </td>
                 <td className="px-4 py-3 text-slate-400">{task.project?.name ?? "—"}</td>
                 <td className="px-4 py-3 text-slate-400">{task.assignee?.name ?? "—"}</td>
                 <td className="px-4 py-3 text-slate-400">
                   {task.dueDate ? formatDueDate(task.dueDate) : "—"}
                 </td>
                 <td className="px-4 py-3">
-                  <Badge status={task.status}>{formatStatus(task.status)}</Badge>
+                  {!done && <Badge status={task.status}>{formatStatus(task.status)}</Badge>}
+                  {done && <span className="text-xs text-emerald-400">Done</span>}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex gap-1">
@@ -117,7 +133,8 @@ export function TasksPanel({ tasks, projects, team }: Props) {
                   </div>
                 </td>
               </tr>
-            ))}
+            );
+            })}
           </tbody>
         </table>
       </div>

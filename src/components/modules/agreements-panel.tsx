@@ -7,6 +7,7 @@ import { Modal, Button, Input, Select } from "@/components/ui/forms";
 import { Badge } from "@/components/ui";
 import { createAgreement, updateAgreement, deleteAgreement } from "@/lib/actions";
 import { formatCurrency, formatDate, formatStatus } from "@/lib/utils";
+import { AgreementDocumentUpload } from "./agreement-document-upload";
 
 type Agreement = {
   id: string;
@@ -16,6 +17,8 @@ type Agreement = {
   value: number | null;
   startDate: Date | null;
   endDate: Date | null;
+  signedAt: Date | null;
+  documentUrl: string | null;
   client: { company: string };
 };
 
@@ -51,42 +54,107 @@ export function AgreementsPanel({ agreements, clients }: Props) {
         <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" /> New Agreement</Button>
       </div>
       <div className="space-y-4">
-        {agreements.map((a) => (
-          <div key={a.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-6">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="mb-1 flex items-center gap-3">
-                  <h3 className="font-medium text-white">{a.title}</h3>
-                  <Badge status={a.status}>{formatStatus(a.status)}</Badge>
+        {agreements.length === 0 ? (
+          <p className="text-sm text-slate-500">No agreements yet.</p>
+        ) : (
+          agreements.map((a) => (
+            <div key={a.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="mb-1 flex flex-wrap items-center gap-3">
+                    <h3 className="font-medium text-white">{a.title}</h3>
+                    <Badge status={a.status}>{formatStatus(a.status)}</Badge>
+                  </div>
+                  <p className="text-sm text-slate-500">{a.client.company}</p>
+                  {a.value != null && (
+                    <p className="mt-2 text-sm text-slate-300">{formatCurrency(a.value)}</p>
+                  )}
+                  {a.signedAt && (
+                    <p className="mt-1 text-xs text-slate-500">Signed {formatDate(a.signedAt)}</p>
+                  )}
+                  {a.description && (
+                    <p className="mt-2 text-sm text-slate-400 line-clamp-2">{a.description}</p>
+                  )}
                 </div>
-                <p className="text-sm text-slate-500">{a.client.company}</p>
-                {a.value && <p className="mt-2 text-sm text-slate-300">{formatCurrency(a.value)}</p>}
+                <div className="flex shrink-0 gap-2">
+                  {a.status === "SENT" && (
+                    <Button
+                      variant="secondary"
+                      className="text-xs"
+                      onClick={() =>
+                        startTransition(async () => {
+                          await updateAgreement(a.id, {
+                            status: "SIGNED",
+                            signedAt: new Date().toISOString(),
+                          });
+                          router.refresh();
+                        })
+                      }
+                    >
+                      Mark signed
+                    </Button>
+                  )}
+                  <button
+                    onClick={() =>
+                      confirm("Delete agreement?") &&
+                      startTransition(async () => {
+                        await deleteAgreement(a.id);
+                        router.refresh();
+                      })
+                    }
+                    className="text-slate-400 hover:text-red-400"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
-              <div className="flex gap-2">
-                {a.status === "SENT" && (
-                  <Button variant="secondary" className="text-xs" onClick={() => startTransition(async () => { await updateAgreement(a.id, { status: "SIGNED", signedAt: new Date().toISOString() }); router.refresh(); })}>
-                    Mark signed
-                  </Button>
-                )}
-                <button onClick={() => confirm("Delete?") && startTransition(async () => { await deleteAgreement(a.id); router.refresh(); })} className="text-slate-400 hover:text-red-400"><Trash2 className="h-4 w-4" /></button>
-              </div>
+              <AgreementDocumentUpload
+                agreementId={a.id}
+                documentUrl={a.documentUrl}
+                onChange={() => router.refresh()}
+              />
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
       <Modal open={open} onClose={() => setOpen(false)} title="New Agreement" wide>
-        <form onSubmit={(e) => { e.preventDefault(); submit(new FormData(e.currentTarget)); }} className="space-y-4">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit(new FormData(e.currentTarget));
+          }}
+          className="space-y-4"
+        >
           <Input label="Title" name="title" required />
-          <Select label="Client" name="clientId" options={clients.map((c) => ({ value: c.id, label: c.company }))} required />
+          <Select
+            label="Client"
+            name="clientId"
+            options={clients.map((c) => ({ value: c.id, label: c.company }))}
+            required
+          />
           <Input label="Value" name="value" type="number" step="0.01" />
-          <Select label="Status" name="status" options={["DRAFT", "SENT", "SIGNED", "EXPIRED"].map((s) => ({ value: s, label: formatStatus(s) }))} />
+          <Select
+            label="Status"
+            name="status"
+            options={["DRAFT", "SENT", "SIGNED", "EXPIRED"].map((s) => ({
+              value: s,
+              label: formatStatus(s),
+            }))}
+          />
           <div className="grid grid-cols-2 gap-4">
             <Input label="Start date" name="startDate" type="date" />
             <Input label="End date" name="endDate" type="date" />
           </div>
+          <p className="text-xs text-slate-500">
+            Upload the signed PDF after creating the agreement.
+          </p>
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={pending}>Create</Button>
+            <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={pending}>
+              Create
+            </Button>
           </div>
         </form>
       </Modal>

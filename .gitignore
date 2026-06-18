@@ -41,6 +41,12 @@ yarn-error.log*
 # vercel
 .vercel
 
+# uploaded agreement PDFs (local dev)
+/public/uploads/agreements/*
+!/public/uploads/agreements/.gitkeep
+/public/uploads/receipts/*
+!/public/uploads/receipts/.gitkeep
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

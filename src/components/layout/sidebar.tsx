@@ -14,6 +14,8 @@ import {
   Video,
   Activity,
   Building2,
+  Target,
+  Inbox,
   ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -21,6 +23,8 @@ import { Logo } from "./logo";
 
 const adminNav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/kpis", label: "KPIs & Goals", icon: Target },
+  { href: "/requests", label: "Client Requests", icon: Inbox },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/deliverables", label: "Deliverables", icon: Package },
   { href: "/agreements", label: "Agreements", icon: FileText },

@@ -2,69 +2,105 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
 import bcrypt from "bcryptjs";
+import { seedNorthopsData } from "./seed-northops";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
 
 const DEFAULT_PASSWORD = "northops123";
 
-async function main() {
-  console.log("Seeding NorthOps database...");
+async function ensureAdminUser() {
   const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
-
-  await prisma.notification.deleteMany();
-  await prisma.activityLog.deleteMany();
-  await prisma.timelineEvent.deleteMany();
-  await prisma.expense.deleteMany();
-  await prisma.invoiceLineItem.deleteMany();
-  await prisma.invoice.deleteMany();
-  await prisma.agreement.deleteMany();
-  await prisma.deliverable.deleteMany();
-  await prisma.task.deleteMany();
-  await prisma.meeting.deleteMany();
-  await prisma.project.deleteMany();
-  await prisma.user.deleteMany();
-  await prisma.client.deleteMany();
-
-  const clients = await Promise.all([
-    prisma.client.create({ data: { name: "Sarah Chen", company: "Meridian Health", email: "sarah.chen@meridianhealth.com", phone: "+1 (415) 555-0142", status: "active" } }),
-    prisma.client.create({ data: { name: "James Okonkwo", company: "Atlas Logistics", email: "james@atlaslogistics.io", status: "active" } }),
-    prisma.client.create({ data: { name: "Elena Vasquez", company: "BrightPath Education", email: "elena@brightpath.edu", status: "active" } }),
-  ]);
-
-  const team = await Promise.all([
-    prisma.user.create({ data: { email: "curran@northops.io", name: "Curran Advani", role: "ADMIN", passwordHash } }),
-    prisma.user.create({ data: { email: "alex@northops.io", name: "Alex Rivera", role: "TEAM", passwordHash } }),
-    prisma.user.create({ data: { email: "morgan@northops.io", name: "Morgan Lee", role: "TEAM", passwordHash } }),
-    prisma.user.create({ data: { email: "sarah.chen@meridianhealth.com", name: "Sarah Chen", role: "CLIENT", clientId: clients[0].id, passwordHash } }),
-  ]);
-
-  const [curran, alex, morgan] = team;
-
-  const projects = await Promise.all([
-    prisma.project.create({ data: { name: "Patient Portal Redesign", clientId: clients[0].id, status: "active", budget: 85000 } }),
-    prisma.project.create({ data: { name: "Fleet Management System", clientId: clients[1].id, status: "active", budget: 120000 } }),
-    prisma.project.create({ data: { name: "Learning Analytics Dashboard", clientId: clients[2].id, status: "active", budget: 65000 } }),
-  ]);
-
-  await prisma.task.createMany({
-    data: [
-      { title: "Finalize wireframes for patient dashboard", status: "IN_PROGRESS", priority: "high", dueDate: new Date("2026-06-18"), projectId: projects[0].id, assigneeId: alex.id, createdById: curran.id, isClientVisible: true },
-      { title: "Review HIPAA compliance checklist", status: "TODO", priority: "high", dueDate: new Date("2026-06-20"), projectId: projects[0].id, assigneeId: curran.id, createdById: curran.id },
-    ],
-  });
-
-  await prisma.deliverable.create({ data: { title: "Patient Dashboard MVP", status: "IN_PROGRESS", dueDate: new Date("2026-07-01"), projectId: projects[0].id } });
-  await prisma.agreement.create({ data: { title: "MSA — Meridian Health", status: "SIGNED", value: 85000, clientId: clients[0].id } });
-  await prisma.invoice.create({
-    data: {
-      number: "INV-2026-0042", status: "PAID", amount: 21250, tax: 0, total: 21250, clientId: clients[0].id,
-      lineItems: { create: [{ description: "Design Sprint", quantity: 1, unitPrice: 21250, total: 21250 }] },
+  return prisma.user.upsert({
+    where: { email: "curran@northops.io" },
+    create: {
+      email: "curran@northops.io",
+      name: "Curran Advani",
+      role: "ADMIN",
+      passwordHash,
+    },
+    update: {
+      name: "Curran Advani",
+      role: "ADMIN",
     },
   });
-
-  console.log("Seed complete! Password:", DEFAULT_PASSWORD);
-  console.log("  Admin:  curran@northops.io");
 }
 
-main().catch(console.error).finally(() => prisma.$disconnect());
+async function seedDefaultKpis() {
+  const existing = await prisma.kpiGoal.count();
+  if (existing > 0) return;
+
+  const now = new Date();
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - now.getDay() + 1);
+
+  await prisma.kpiGoal.createMany({
+    data: [
+      {
+        title: "Close active client implementations",
+        description: "SKAPS onboarding + Nielsen kickoff",
+        target: 2,
+        current: 0,
+        unit: "count",
+        period: "weekly",
+        startDate: weekStart,
+      },
+      {
+        title: "Move TFP to signed pilot",
+        target: 1,
+        current: 0,
+        unit: "count",
+        period: "monthly",
+        startDate: new Date(now.getFullYear(), now.getMonth(), 1),
+      },
+      {
+        title: "Monthly revenue collected",
+        target: 25000,
+        current: 0,
+        unit: "currency",
+        period: "monthly",
+        startDate: new Date(now.getFullYear(), now.getMonth(), 1),
+      },
+      {
+        title: "Fire-protection outreach meetings",
+        target: 5,
+        current: 0,
+        unit: "count",
+        period: "weekly",
+        startDate: weekStart,
+      },
+    ],
+  });
+}
+
+async function main() {
+  console.log("Seeding NorthOps dashboard (idempotent — existing records preserved)...");
+
+  const admin = await ensureAdminUser();
+  console.log("Admin user ready:", admin.email);
+
+  const counts = await seedNorthopsData(prisma, admin.id);
+  await seedDefaultKpis();
+
+  console.log("\nNorthOps seed complete.");
+  console.log("Records upserted:");
+  console.log(`  Clients:          ${counts.clients}`);
+  console.log(`  Projects:         ${counts.projects}`);
+  console.log(`  Agreements:       ${counts.agreements}`);
+  console.log(`  Invoices:         ${counts.invoices}`);
+  console.log(`  Meetings:         ${counts.meetings}`);
+  console.log(`  Tasks:            ${counts.tasks}`);
+  console.log(`  Deliverables:     ${counts.deliverables}`);
+  console.log(`  Timeline events:  ${counts.timelineEvents}`);
+  console.log(`  Activities:       ${counts.activities}`);
+  console.log("\nLogin: curran@northops.io /", DEFAULT_PASSWORD);
+  console.log("\nUncertain statuses preserved for: TFP (prospect), Nielsen (committed), Mynt (prospect).");
+  console.log("Only SKAPS marked as signed/active client.");
+}
+
+main()
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  })
+  .finally(() => prisma.$disconnect());

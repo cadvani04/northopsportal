@@ -8,7 +8,8 @@ import {
   Video,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { StatCard, Card, Badge } from "@/components/ui";
+import { StatCard, Card } from "@/components/ui";
+import { DashboardTasksList } from "@/components/modules/dashboard-tasks-list";
 import {
   getDashboardStats,
   getMyTasks,
@@ -19,8 +20,6 @@ import { requireAdmin } from "@/lib/auth/session";
 import {
   formatCurrency,
   formatRelative,
-  formatDueDate,
-  formatStatus,
   getInitials,
 } from "@/lib/utils";
 
@@ -60,24 +59,7 @@ export default async function DashboardPage() {
               <h2 className="text-lg font-semibold text-white">Your Tasks</h2>
               <a href="/tasks" className="text-sm text-cyan-400 hover:text-cyan-300">View all →</a>
             </div>
-            <div className="space-y-3">
-              {myOpenTasks.length === 0 ? (
-                <p className="py-4 text-center text-sm text-slate-500">No open tasks assigned to you</p>
-              ) : (
-                myOpenTasks.map((task) => (
-                  <div key={task.id} className="flex items-center justify-between rounded-lg border border-white/5 bg-white/[0.02] px-4 py-3">
-                    <div>
-                      <p className="text-sm font-medium text-white">{task.title}</p>
-                      {task.project && <p className="text-xs text-slate-500">{task.project.client.company}</p>}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {task.dueDate && <span className="text-xs text-slate-400">{formatDueDate(task.dueDate)}</span>}
-                      <Badge status={task.status}>{formatStatus(task.status)}</Badge>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+            <DashboardTasksList tasks={myOpenTasks} />
           </Card>
           <Card>
             <h2 className="mb-4 text-lg font-semibold text-white">Team</h2>

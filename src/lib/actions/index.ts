@@ -26,6 +26,8 @@ function revalidateAll() {
     "/clients",
     "/activity",
     "/portal",
+    "/requests",
+    "/kpis",
   ];
   paths.forEach((p) => revalidatePath(p));
 }
@@ -101,6 +103,17 @@ export async function updateTask(
   await logActivity({ type: "TASK_UPDATED", title: `Task updated: ${task.title}`, userId: user.id });
   revalidateAll();
   return { ok: true };
+}
+
+export async function toggleTaskComplete(id: string) {
+  await requireStaff();
+  const task = await db.task.findUnique({ where: { id } });
+  if (!task) return { ok: false as const };
+
+  const status: TaskStatus = task.status === "DONE" ? "TODO" : "DONE";
+  await db.task.update({ where: { id }, data: { status } });
+  revalidateAll();
+  return { ok: true as const, status };
 }
 
 export async function deleteTask(id: string) {
@@ -233,6 +246,7 @@ export async function deleteClient(id: string) {
       await tx.agreement.deleteMany({ where: { clientId: id } });
       await tx.meeting.deleteMany({ where: { clientId: id } });
       await tx.activityLog.deleteMany({ where: { clientId: id } });
+      await tx.clientRequest.deleteMany({ where: { clientId: id } });
 
       const linkedUsers = await tx.user.findMany({
         where: { clientId: id },
@@ -359,6 +373,11 @@ export async function updateAgreement(
 
 export async function deleteAgreement(id: string) {
   await requireAdmin();
+  const agreement = await db.agreement.findUnique({ where: { id } });
+  if (agreement?.documentUrl) {
+    const { deleteAgreementPdf } = await import("@/lib/agreement-documents");
+    await deleteAgreementPdf(agreement.documentUrl);
+  }
   await db.agreement.delete({ where: { id } });
   revalidateAll();
   return { ok: true };
@@ -643,6 +662,295 @@ export async function createClientUser(data: {
     clientId: data.clientId,
     userId: user.id,
   });
+  revalidateAll();
+  return { ok: true };
+}
+
+// ─── Client requests ─────────────────────────────────────────────────────────
+
+export async function submitClientRequest(data: {
+  title: string;
+  description?: string;
+  category?: string;
+  projectId?: string;
+}) {
+  const user = await requireAuth();
+  if (user.role !== "CLIENT" || !user.clientId) {
+    return { ok: false as const, error: "Client access required" };
+  }
+
+  const { findAssigneeForCategory } = await import("@/lib/routing");
+  const category = data.category || "general";
+  const assigneeId = await findAssigneeForCategory(db, category);
+
+  const project =
+    (data.projectId
+      ? await db.project.findFirst({ where: { id: data.projectId, clientId: user.clientId } })
+      : null) ||
+    (await db.project.findFirst({
+      where: { clientId: user.clientId, status: { in: ["active", "implementation"] } },
+      orderBy: { updatedAt: "desc" },
+    }));
+
+  const task = await db.task.create({
+    data: {
+      title: data.title,
+      description: data.description || `Client request (${category})`,
+      status: "TODO",
+      priority: category === "bug" ? "high" : "medium",
+      projectId: project?.id,
+      assigneeId: assigneeId ?? undefined,
+      createdById: user.id,
+      isClientVisible: true,
+    },
+  });
+
+  let deliverableId: string | undefined;
+  if (project && ["content", "feature", "email"].includes(category)) {
+    const deliverable = await db.deliverable.create({
+      data: {
+        title: data.title,
+        description: data.description,
+        status: "PLANNED",
+        projectId: project.id,
+      },
+    });
+    deliverableId = deliverable.id;
+  }
+
+  const request = await db.clientRequest.create({
+    data: {
+      title: data.title,
+      description: data.description,
+      category,
+      source: "portal",
+      clientId: user.clientId,
+      projectId: project?.id,
+      submittedById: user.id,
+      assigneeId: assigneeId ?? undefined,
+      taskId: task.id,
+      deliverableId,
+    },
+  });
+
+  if (assigneeId) {
+    await db.notification.create({
+      data: {
+        userId: assigneeId,
+        title: "New client request",
+        message: `${data.title} from ${user.name}`,
+        link: "/requests",
+      },
+    });
+  }
+
+  await notifyTeam({
+    title: "Client request submitted",
+    message: data.title,
+    link: "/requests",
+    excludeUserId: user.id,
+  });
+
+  await logActivity({
+    type: "TASK_CREATED",
+    title: `Client request: ${data.title}`,
+    description: data.description,
+    clientId: user.clientId,
+    userId: user.id,
+    metadata: { requestId: request.id, category },
+  });
+
+  revalidateAll();
+  return { ok: true as const, id: request.id };
+}
+
+export async function updateClientRequestStatus(id: string, status: string) {
+  await requireStaff();
+  await db.clientRequest.update({ where: { id }, data: { status } });
+  revalidateAll();
+  return { ok: true };
+}
+
+export async function processInboundEmail(data: {
+  from: string;
+  to: string;
+  subject: string;
+  body: string;
+}) {
+  const emailMatch = data.from.match(/[\w.-]+@[\w.-]+\.\w+/);
+  const fromEmail = emailMatch?.[0]?.toLowerCase();
+  if (!fromEmail) {
+    throw new Error("Could not parse sender email");
+  }
+
+  let client = await db.client.findFirst({
+    where: { email: { equals: fromEmail, mode: "insensitive" } },
+  });
+  if (!client) {
+    const portalUser = await db.user.findUnique({
+      where: { email: fromEmail },
+      select: { clientId: true },
+    });
+    if (portalUser?.clientId) {
+      client = await db.client.findUnique({ where: { id: portalUser.clientId } });
+    }
+  }
+
+  const { findAssigneeForCategory, normalizeEmailCategory } = await import("@/lib/routing");
+  const category = normalizeEmailCategory(data.subject, data.body);
+  const assigneeId = await findAssigneeForCategory(db, category);
+
+  const project = client
+    ? await db.project.findFirst({
+        where: { clientId: client.id, status: { in: ["active", "implementation"] } },
+        orderBy: { updatedAt: "desc" },
+      })
+    : null;
+
+  if (!client || !project) {
+    if (!client) {
+      await notifyTeam({
+        title: "Inbound email (unknown sender)",
+        message: `${data.subject} from ${fromEmail}`,
+        link: "/requests",
+      });
+      throw new Error(`No client matched for ${fromEmail}`);
+    }
+
+    const request = await db.clientRequest.create({
+      data: {
+        title: data.subject || "Inbound email",
+        description: `${data.body}\n\n---\nFrom: ${data.from}\nTo: ${data.to}`,
+        category,
+        source: "email",
+        status: "open",
+        clientId: client.id,
+        assigneeId: assigneeId ?? undefined,
+      },
+    });
+    await notifyTeam({
+      title: "Inbound email (no active project)",
+      message: data.subject,
+      link: "/requests",
+    });
+    revalidateAll();
+    return { ok: true, requestId: request.id, matched: false };
+  }
+
+  const deliverable = await db.deliverable.create({
+    data: {
+      title: data.subject || "Email request",
+      description: `${data.body}\n\n---\nFrom: ${data.from}`,
+      status: "PLANNED",
+      projectId: project.id,
+    },
+  });
+
+  const task = await db.task.create({
+    data: {
+      title: `Email: ${data.subject}`,
+      description: data.body.slice(0, 2000),
+      status: "TODO",
+      priority: "medium",
+      projectId: project.id,
+      assigneeId: assigneeId ?? undefined,
+      isClientVisible: true,
+    },
+  });
+
+  const request = await db.clientRequest.create({
+    data: {
+      title: data.subject || "Inbound email",
+      description: data.body,
+      category,
+      source: "email",
+      status: "open",
+      clientId: client.id,
+      projectId: project.id,
+      assigneeId: assigneeId ?? undefined,
+      taskId: task.id,
+      deliverableId: deliverable.id,
+    },
+  });
+
+  if (assigneeId) {
+    await db.notification.create({
+      data: {
+        userId: assigneeId,
+        title: "Email routed to deliverables",
+        message: data.subject,
+        link: "/deliverables",
+      },
+    });
+  }
+
+  await notifyTeam({
+    title: "Email → deliverable created",
+    message: `${data.subject} from ${fromEmail}`,
+    link: "/deliverables",
+  });
+
+  await logActivity({
+    type: "DELIVERABLE_UPDATED",
+    title: `Email deliverable: ${data.subject}`,
+    description: `From ${fromEmail}`,
+    clientId: client.id,
+    metadata: { requestId: request.id, deliverableId: deliverable.id },
+  });
+
+  revalidateAll();
+  return { ok: true, requestId: request.id, deliverableId: deliverable.id, matched: true };
+}
+
+// ─── KPI goals ───────────────────────────────────────────────────────────────
+
+export async function createKpiGoal(data: {
+  title: string;
+  description?: string;
+  target: number;
+  current?: number;
+  unit?: string;
+  period: string;
+  startDate: string;
+  endDate?: string;
+}) {
+  await requireAdmin();
+  await db.kpiGoal.create({
+    data: {
+      title: data.title,
+      description: data.description,
+      target: data.target,
+      current: data.current ?? 0,
+      unit: data.unit || "count",
+      period: data.period,
+      startDate: new Date(data.startDate),
+      endDate: data.endDate ? new Date(data.endDate) : undefined,
+    },
+  });
+  revalidateAll();
+  return { ok: true };
+}
+
+export async function updateKpiGoal(
+  id: string,
+  data: Partial<{ title: string; description: string; target: number; current: number; unit: string; period: string; startDate: string; endDate: string }>
+) {
+  await requireAdmin();
+  await db.kpiGoal.update({
+    where: { id },
+    data: {
+      ...data,
+      startDate: data.startDate ? new Date(data.startDate) : undefined,
+      endDate: data.endDate ? new Date(data.endDate) : undefined,
+    },
+  });
+  revalidateAll();
+  return { ok: true };
+}
+
+export async function deleteKpiGoal(id: string) {
+  await requireAdmin();
+  await db.kpiGoal.delete({ where: { id } });
   revalidateAll();
   return { ok: true };
 }

@@ -1,20 +1,23 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, Badge } from "@/components/ui";
+import { ClientRequestForm } from "@/components/modules/client-request-form";
 import { requireClient } from "@/lib/auth/session";
 import { getClientPortalData } from "@/lib/queries";
-import {
-  formatCurrency,
-  formatDate,
-  formatRelative,
-  formatStatus,
-  formatDueDate,
-} from "@/lib/utils";
-import { CheckSquare, Package, FileText, Receipt, Video } from "lucide-react";
+import { db } from "@/lib/db";
+import { formatCurrency, formatDate, formatRelative, formatStatus } from "@/lib/utils";
+import { CheckSquare, Package, FileText, Receipt, Video, Send } from "lucide-react";
 
 export default async function ClientPortalPage() {
   const user = await requireClient();
   const { client, tasks, deliverables, agreements, invoices, meetings, activities } =
     await getClientPortalData(user.clientId!);
+
+  const projects = client
+    ? await db.project.findMany({
+        where: { clientId: client.id, status: { in: ["active", "implementation"] } },
+        orderBy: { name: "asc" },
+      })
+    : [];
 
   if (!client) {
     return (
@@ -50,6 +53,16 @@ export default async function ClientPortalPage() {
         ))}
       </div>
 
+      <Card className="mb-8">
+        <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
+          <Send className="h-5 w-5 text-cyan-400" /> Submit a Request
+        </h2>
+        <p className="mb-4 text-sm text-slate-500">
+          Send a request here or email <span className="text-slate-300">dev@northops.org</span> — it will route to the right person automatically.
+        </p>
+        <ClientRequestForm projects={projects.map((p) => ({ id: p.id, name: p.name }))} />
+      </Card>
+
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <h2 className="mb-4 text-lg font-semibold text-white">Your Tasks</h2>
@@ -57,7 +70,7 @@ export default async function ClientPortalPage() {
             {tasks.length === 0 ? (
               <p className="text-sm text-slate-500">No shared tasks yet.</p>
             ) : (
-              tasks.map((task) => (
+              tasks.slice(0, 5).map((task) => (
                 <div key={task.id} className="flex items-center justify-between rounded-lg border border-white/5 px-4 py-3">
                   <div>
                     <p className="text-sm font-medium text-white">{task.title}</p>
@@ -72,7 +85,7 @@ export default async function ClientPortalPage() {
         <Card>
           <h2 className="mb-4 text-lg font-semibold text-white">Deliverables</h2>
           <div className="space-y-3">
-            {deliverables.map((d) => (
+            {deliverables.slice(0, 5).map((d) => (
               <div key={d.id} className="flex items-center justify-between rounded-lg border border-white/5 px-4 py-3">
                 <div>
                   <p className="text-sm font-medium text-white">{d.title}</p>
@@ -87,13 +100,18 @@ export default async function ClientPortalPage() {
           <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
             <FileText className="h-5 w-5" /> Agreements
           </h2>
-          {agreements.map((a) => (
+          {agreements.slice(0, 3).map((a) => (
             <div key={a.id} className="mb-3 rounded-lg border border-white/5 px-4 py-3">
               <div className="flex justify-between">
                 <p className="text-sm text-white">{a.title}</p>
                 <Badge status={a.status}>{formatStatus(a.status)}</Badge>
               </div>
               {a.value && <p className="mt-1 text-xs text-slate-500">{formatCurrency(a.value)}</p>}
+              {a.status === "SIGNED" && a.documentUrl && (
+                <a href={a.documentUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex text-xs text-cyan-400 hover:text-cyan-300">
+                  View signed agreement (PDF)
+                </a>
+              )}
             </div>
           ))}
         </Card>
@@ -101,7 +119,7 @@ export default async function ClientPortalPage() {
           <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
             <Receipt className="h-5 w-5" /> Invoices
           </h2>
-          {invoices.map((inv) => (
+          {invoices.slice(0, 3).map((inv) => (
             <div key={inv.id} className="mb-3 flex justify-between rounded-lg border border-white/5 px-4 py-3">
               <div>
                 <p className="text-sm text-white">{inv.number}</p>
@@ -119,11 +137,11 @@ export default async function ClientPortalPage() {
       {meetings.length > 0 && (
         <Card className="mt-6">
           <h2 className="mb-4 text-lg font-semibold text-white">Recent Meetings</h2>
-          {meetings.map((m) => (
+          {meetings.slice(0, 3).map((m) => (
             <div key={m.id} className="mb-4 last:mb-0">
               <p className="font-medium text-white">{m.title}</p>
               <p className="text-xs text-slate-500">{formatDate(m.date)}</p>
-              {m.summary && <p className="mt-2 text-sm text-slate-400">{m.summary}</p>}
+              {m.summary && <p className="mt-2 text-sm text-slate-400 line-clamp-2">{m.summary}</p>}
             </div>
           ))}
         </Card>
