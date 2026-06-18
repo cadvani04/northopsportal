@@ -48,7 +48,9 @@ export async function uploadFile(
   }
 
   if (process.env.NODE_ENV === "production") {
-    throw new Error("BLOB_READ_WRITE_TOKEN is not configured.");
+    throw new Error(
+      "File storage is not configured. In Vercel: Project → Storage → Create Blob → Connect to this project, then redeploy."
+    );
   }
 
   const localDir = path.join(process.cwd(), "public", options.localDir || "uploads");
