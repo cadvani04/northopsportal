@@ -31,18 +31,28 @@ export function AgreementsPanel({ agreements, clients }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   function submit(form: FormData) {
+    setError(null);
+    const valueRaw = parseFloat(form.get("value") as string);
+
     startTransition(async () => {
-      await createAgreement({
+      const result = await createAgreement({
         title: form.get("title") as string,
         description: (form.get("description") as string) || undefined,
         clientId: form.get("clientId") as string,
-        value: parseFloat(form.get("value") as string) || undefined,
+        value: Number.isFinite(valueRaw) ? valueRaw : undefined,
         status: form.get("status") as never,
         startDate: (form.get("startDate") as string) || undefined,
         endDate: (form.get("endDate") as string) || undefined,
       });
+
+      if (!result.ok) {
+        setError(result.error ?? "Could not create agreement");
+        return;
+      }
+
       setOpen(false);
       router.refresh();
     });
@@ -148,6 +158,7 @@ export function AgreementsPanel({ agreements, clients }: Props) {
           <p className="text-xs text-slate-500">
             Upload the signed PDF after creating the agreement.
           </p>
+          {error && <p className="text-sm text-red-400">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
               Cancel

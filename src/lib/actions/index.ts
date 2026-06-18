@@ -326,16 +326,31 @@ export async function createAgreement(data: {
   endDate?: string;
   clientId: string;
 }) {
-  const user = await requireAdmin();
-  const a = await db.agreement.create({ data: { ...data, status: data.status || "DRAFT" } });
-  await logActivity({
-    type: "AGREEMENT_SIGNED",
-    title: `Agreement created: ${a.title}`,
-    clientId: a.clientId,
-    userId: user.id,
-  });
-  revalidateAll();
-  return { ok: true, id: a.id };
+  try {
+    const user = await requireAdmin();
+    const a = await db.agreement.create({
+      data: {
+        title: data.title,
+        description: data.description,
+        status: data.status || "DRAFT",
+        clientId: data.clientId,
+        value: data.value != null && Number.isFinite(data.value) ? data.value : undefined,
+        startDate: data.startDate ? new Date(data.startDate) : undefined,
+        endDate: data.endDate ? new Date(data.endDate) : undefined,
+      },
+    });
+    await logActivity({
+      type: "AGREEMENT_SIGNED",
+      title: `Agreement created: ${a.title}`,
+      clientId: a.clientId,
+      userId: user.id,
+    });
+    revalidateAll();
+    return { ok: true as const, id: a.id };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not create agreement";
+    return { ok: false as const, error: message };
+  }
 }
 
 export async function updateAgreement(
