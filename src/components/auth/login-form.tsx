@@ -2,10 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 export function LoginForm() {
-  const router = useRouter();
   const params = useSearchParams();
   const callbackUrl = params.get("callbackUrl") || "/";
   const [error, setError] = useState("");
@@ -24,8 +23,7 @@ export function LoginForm() {
         setError("Invalid email or password.");
         return;
       }
-      router.push(callbackUrl);
-      router.refresh();
+      window.location.href = callbackUrl;
     });
   }
 

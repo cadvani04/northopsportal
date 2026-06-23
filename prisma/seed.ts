@@ -4,6 +4,7 @@ import { PrismaClient } from "../src/generated/prisma/client";
 import bcrypt from "bcryptjs";
 import { seedNorthopsData } from "./seed-northops";
 import { seedSalesCrmData } from "./seed-sales";
+import { ensureNorthOpsInterns } from "./intern-users";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
@@ -17,34 +18,6 @@ const NORTHOPS_ADMINS = [
   { email: "kayden@northops.io", name: "Kayden", teamRole: "sales" },
   { email: "chaavan@northops.io", name: "Chaavan", teamRole: "dev" },
 ] as const;
-
-const NORTHOPS_INTERNS = [
-  { email: "intern@northops.io", name: "Sales Intern" },
-  { email: "intern2@northops.io", name: "Sales Intern 2" },
-  { email: "camille@northops.io", name: "Camille Garipova" },
-] as const;
-
-async function ensureNorthOpsInterns() {
-  const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
-
-  for (const user of NORTHOPS_INTERNS) {
-    await prisma.user.upsert({
-      where: { email: user.email },
-      create: {
-        email: user.email,
-        name: user.name,
-        role: "INTERN",
-        teamRole: "sales",
-        passwordHash,
-      },
-      update: {
-        name: user.name,
-        role: "INTERN",
-        teamRole: "sales",
-      },
-    });
-  }
-}
 
 async function ensureNorthOpsAdmins() {
   const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
@@ -170,7 +143,7 @@ async function main() {
   console.log("Seeding NorthOps dashboard (idempotent — existing records preserved)...");
 
   const admin = await ensureNorthOpsAdmins();
-  await ensureNorthOpsInterns();
+  await ensureNorthOpsInterns(prisma);
   await removeMockUsers();
   console.log("Admin users ready:", NORTHOPS_ADMINS.map((u) => u.email).join(", "));
 
