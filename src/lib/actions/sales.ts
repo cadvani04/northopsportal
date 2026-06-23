@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { requireAdmin } from "@/lib/auth/session";
+import { requireAdmin, requireOutreachAccess } from "@/lib/auth/session";
 import { logActivity } from "@/lib/activity";
 import { logOutreachWithAttachments } from "@/lib/outreach/service";
 import type {
@@ -154,7 +154,7 @@ export async function logOutreachTouch(data: {
   touchedAt?: string;
   nextFollowUp?: string;
 }) {
-  const user = await requireAdmin();
+  const user = await requireOutreachAccess();
 
   const { touch } = await logOutreachWithAttachments(
     {

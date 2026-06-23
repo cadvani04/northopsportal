@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
+import { canLogOutreach } from "@/lib/auth/permissions";
 import { logOutreachWithAttachments, searchProspects } from "@/lib/outreach/service";
 import type { OutreachChannel, OutreachOutcome } from "@/generated/prisma/enums";
 
 export async function GET(request: Request) {
   const session = await auth();
-  if (!session?.user?.id || session.user.role === "CLIENT") {
+  if (!session?.user?.id || !canLogOutreach(session.user.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -18,7 +19,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const session = await auth();
-  if (!session?.user?.id || session.user.role === "CLIENT") {
+  if (!session?.user?.id || !canLogOutreach(session.user.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

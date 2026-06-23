@@ -1,4 +1,5 @@
 import type { NextAuthConfig } from "next-auth";
+import { isInternAllowedPath } from "@/lib/auth/permissions";
 
 export const authConfig = {
   secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
@@ -21,6 +22,9 @@ export const authConfig = {
       if (!isLoggedIn) return false;
       if (auth?.user?.role === "CLIENT" && !nextUrl.pathname.startsWith("/portal")) {
         return Response.redirect(new URL("/portal", nextUrl));
+      }
+      if (auth?.user?.role === "INTERN" && !isInternAllowedPath(nextUrl.pathname)) {
+        return Response.redirect(new URL("/sales/outreach", nextUrl));
       }
       return true;
     },

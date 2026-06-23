@@ -40,6 +40,10 @@ const adminNav = [
   { href: "/activity", label: "Activity", icon: Activity },
 ];
 
+const internNav = [
+  { href: "/sales/outreach", label: "Outreach Log", icon: Send },
+];
+
 const clientNav = [
   { href: "/portal", label: "Overview", icon: LayoutDashboard },
   { href: "/portal/tasks", label: "Tasks", icon: CheckSquare },
@@ -50,12 +54,19 @@ const clientNav = [
 ];
 
 interface SidebarProps {
-  mode?: "admin" | "client";
+  mode?: "admin" | "client" | "intern";
 }
 
 export function Sidebar({ mode = "admin" }: SidebarProps) {
   const pathname = usePathname();
-  const nav = mode === "client" ? clientNav : adminNav;
+  const nav =
+    mode === "client" ? clientNav : mode === "intern" ? internNav : adminNav;
+  const subtitle =
+    mode === "client"
+      ? "Client Portal"
+      : mode === "intern"
+        ? "Sales Intern"
+        : "Operations Hub";
 
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-white/10 bg-[#0c0f14]">
@@ -63,7 +74,7 @@ export function Sidebar({ mode = "admin" }: SidebarProps) {
         <Logo
           size="md"
           showText
-          subtitle={mode === "client" ? "Client Portal" : "Operations Hub"}
+          subtitle={subtitle}
         />
       </div>
 
@@ -104,7 +115,7 @@ export function Sidebar({ mode = "admin" }: SidebarProps) {
             </span>
             <ChevronRight className="h-4 w-4" />
           </Link>
-        ) : (
+        ) : mode === "client" ? (
           <Link
             href="/"
             className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2.5 text-sm font-medium text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
@@ -115,7 +126,7 @@ export function Sidebar({ mode = "admin" }: SidebarProps) {
             </span>
             <ChevronRight className="h-4 w-4" />
           </Link>
-        )}
+        ) : null}
       </div>
     </aside>
   );

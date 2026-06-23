@@ -1,5 +1,11 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
+import {
+  canLogOutreach,
+  canViewRevenue,
+  isClient,
+  isIntern,
+} from "@/lib/auth/permissions";
 
 export type SessionUser = {
   id: string;
@@ -27,9 +33,11 @@ export async function requireAuth(): Promise<SessionUser> {
   return user;
 }
 
+/** Full internal staff (admin + team). Blocks clients and interns. */
 export async function requireAdmin(): Promise<SessionUser> {
   const user = await requireAuth();
-  if (user.role === "CLIENT") redirect("/portal");
+  if (isClient(user.role)) redirect("/portal");
+  if (isIntern(user.role)) redirect("/sales/outreach");
   return user;
 }
 
@@ -39,8 +47,28 @@ export async function requireClient(): Promise<SessionUser> {
   return user;
 }
 
+/** Same as requireAdmin — full staff only. */
 export async function requireStaff(): Promise<SessionUser> {
+  return requireAdmin();
+}
+
+/** Outreach logging for staff and sales interns. */
+export async function requireOutreachAccess(): Promise<SessionUser> {
   const user = await requireAuth();
-  if (user.role === "CLIENT") redirect("/portal");
+  if (!canLogOutreach(user.role)) {
+    if (isClient(user.role)) redirect("/portal");
+    redirect("/login");
+  }
+  return user;
+}
+
+/** Pages with revenue, pipeline value, invoices, etc. */
+export async function requireRevenueAccess(): Promise<SessionUser> {
+  const user = await requireAuth();
+  if (!canViewRevenue(user.role)) {
+    if (isIntern(user.role)) redirect("/sales/outreach");
+    if (isClient(user.role)) redirect("/portal");
+    redirect("/login");
+  }
   return user;
 }

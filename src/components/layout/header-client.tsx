@@ -7,6 +7,7 @@ import { signOut } from "next-auth/react";
 import { cn, formatRelative, getInitials } from "@/lib/utils";
 import { searchAll, markNotificationRead, markAllNotificationsRead } from "@/lib/actions";
 import Link from "next/link";
+import { isIntern } from "@/lib/auth/permissions";
 
 interface Notification {
   id: string;
@@ -31,6 +32,7 @@ export function HeaderClient({
   notifications,
 }: HeaderClientProps) {
   const router = useRouter();
+  const internUser = isIntern(userRole);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Awaited<ReturnType<typeof searchAll>> | null>(null);
   const [showSearch, setShowSearch] = useState(false);
@@ -69,6 +71,8 @@ export function HeaderClient({
 
       <div className="flex items-center gap-4">
         <div className="relative hidden md:block" ref={searchRef}>
+          {!internUser && (
+            <>
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
           <input
             type="search"
@@ -119,6 +123,8 @@ export function HeaderClient({
                 </Link>
               ))}
             </div>
+          )}
+            </>
           )}
         </div>
 

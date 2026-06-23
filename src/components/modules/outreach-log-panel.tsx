@@ -28,7 +28,15 @@ type LogData = Awaited<ReturnType<typeof getOutreachLogData>>;
 type Prospect = LogData["prospects"][number];
 type RecentTouch = LogData["recentTouches"][number];
 
-export function OutreachLogPanel({ data }: { data: LogData }) {
+export function OutreachLogPanel({
+  data,
+  showBackLink = true,
+  isIntern = false,
+}: {
+  data: LogData;
+  showBackLink?: boolean;
+  isIntern?: boolean;
+}) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const [pending, startTransition] = useTransition();
@@ -106,6 +114,7 @@ export function OutreachLogPanel({ data }: { data: LogData }) {
 
   return (
     <>
+      {showBackLink && (
       <div className="mb-6">
         <Link
           href="/sales"
@@ -114,6 +123,7 @@ export function OutreachLogPanel({ data }: { data: LogData }) {
           <ArrowLeft className="h-4 w-4" /> Back to Sales CRM
         </Link>
       </div>
+      )}
 
       <div className="grid gap-8 lg:grid-cols-5">
         <div className="lg:col-span-3 space-y-6">
@@ -281,7 +291,7 @@ export function OutreachLogPanel({ data }: { data: LogData }) {
           <h2 className="mb-4 text-lg font-medium text-white">Recent touches</h2>
           <div className="space-y-3">
             {data.recentTouches.map((touch) => (
-              <TouchCard key={touch.id} touch={touch} />
+              <TouchCard key={touch.id} touch={touch} isIntern={isIntern} />
             ))}
             {data.recentTouches.length === 0 && (
               <Card>
@@ -295,19 +305,23 @@ export function OutreachLogPanel({ data }: { data: LogData }) {
   );
 }
 
-function TouchCard({ touch }: { touch: RecentTouch }) {
+function TouchCard({ touch, isIntern = false }: { touch: RecentTouch; isIntern?: boolean }) {
   return (
     <Card>
       <div className="flex flex-wrap items-center gap-2">
         <Badge status={touch.channel}>{outreachChannelLabel(touch.channel)}</Badge>
         <Badge status={touch.outcome}>{outreachOutcomeLabel(touch.outcome)}</Badge>
       </div>
-      <Link
-        href={`/sales/${touch.client.id}`}
-        className="mt-2 block text-sm font-medium text-cyan-400 hover:text-cyan-300"
-      >
-        {touch.client.company}
-      </Link>
+      {isIntern ? (
+        <p className="mt-2 text-sm font-medium text-white">{touch.client.company}</p>
+      ) : (
+        <Link
+          href={`/sales/${touch.client.id}`}
+          className="mt-2 block text-sm font-medium text-cyan-400 hover:text-cyan-300"
+        >
+          {touch.client.company}
+        </Link>
+      )}
       {touch.subject && <p className="mt-1 text-sm text-white">{touch.subject}</p>}
       {touch.notes && (
         <p className="mt-1 line-clamp-3 text-sm text-slate-400">{touch.notes}</p>

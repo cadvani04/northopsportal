@@ -18,6 +18,34 @@ const NORTHOPS_ADMINS = [
   { email: "chaavan@northops.io", name: "Chaavan", teamRole: "dev" },
 ] as const;
 
+const NORTHOPS_INTERNS = [
+  { email: "intern@northops.io", name: "Sales Intern" },
+  { email: "intern2@northops.io", name: "Sales Intern 2" },
+  { email: "camille@northops.io", name: "Camille Garipova" },
+] as const;
+
+async function ensureNorthOpsInterns() {
+  const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
+
+  for (const user of NORTHOPS_INTERNS) {
+    await prisma.user.upsert({
+      where: { email: user.email },
+      create: {
+        email: user.email,
+        name: user.name,
+        role: "INTERN",
+        teamRole: "sales",
+        passwordHash,
+      },
+      update: {
+        name: user.name,
+        role: "INTERN",
+        teamRole: "sales",
+      },
+    });
+  }
+}
+
 async function ensureNorthOpsAdmins() {
   const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
 
@@ -142,6 +170,7 @@ async function main() {
   console.log("Seeding NorthOps dashboard (idempotent — existing records preserved)...");
 
   const admin = await ensureNorthOpsAdmins();
+  await ensureNorthOpsInterns();
   await removeMockUsers();
   console.log("Admin users ready:", NORTHOPS_ADMINS.map((u) => u.email).join(", "));
 
@@ -165,6 +194,7 @@ async function main() {
   console.log(`  CRM contacts:     ${salesCounts.contacts}`);
   console.log(`  Outreach touches: ${salesCounts.touches}`);
   console.log("\nAdmin portal: curran@northops.io, kayden@northops.io, chaavan@northops.io");
+  console.log("Sales interns: intern@northops.io, intern2@northops.io, camille@northops.io");
   console.log("Initial password (change after first login):", DEFAULT_PASSWORD);
 }
 

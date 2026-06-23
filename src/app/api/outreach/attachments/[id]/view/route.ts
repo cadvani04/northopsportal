@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { canLogOutreach } from "@/lib/auth/permissions";
 import { db } from "@/lib/db";
 import { readStoredFile } from "@/lib/file-storage";
 
@@ -7,7 +8,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(_request: Request, context: RouteContext) {
   const session = await auth();
-  if (!session?.user?.id || session.user.role === "CLIENT") {
+  if (!session?.user?.id || !canLogOutreach(session.user.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

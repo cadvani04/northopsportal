@@ -1,15 +1,18 @@
 import { Sidebar } from "./sidebar";
 import { HeaderClient } from "./header-client";
 import { getSessionUser } from "@/lib/auth/session";
+import { isIntern } from "@/lib/auth/permissions";
 import { db } from "@/lib/db";
 
 interface AppShellProps {
   children: React.ReactNode;
-  mode?: "admin" | "client";
+  mode?: "admin" | "client" | "intern";
 }
 
-export async function AppShell({ children, mode = "admin" }: AppShellProps) {
+export async function AppShell({ children, mode }: AppShellProps) {
   const user = await getSessionUser();
+  const shellMode =
+    mode ?? (user?.role === "CLIENT" ? "client" : isIntern(user?.role ?? "") ? "intern" : "admin");
   const notifications = user
     ? await db.notification.findMany({
         where: { userId: user.id },
@@ -21,7 +24,7 @@ export async function AppShell({ children, mode = "admin" }: AppShellProps) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#080b10]">
-      <Sidebar mode={mode} />
+      <Sidebar mode={shellMode} />
       <div className="flex flex-1 flex-col overflow-hidden">
         {user && (
           <HeaderClient
