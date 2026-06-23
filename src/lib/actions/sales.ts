@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAdmin, requireOutreachAccess } from "@/lib/auth/session";
 import { logActivity } from "@/lib/activity";
-import { logOutreachWithAttachments } from "@/lib/outreach/service";
+import { logOutreachWithAttachments, createOutreachProspect as createProspect } from "@/lib/outreach/service";
 import type {
   OutreachChannel,
   OutreachOutcome,
@@ -74,6 +74,26 @@ export async function createSalesAccount(data: {
 
   revalidateSales();
   return { ok: true as const, id: client.id };
+}
+
+export async function createOutreachProspect(data: {
+  company: string;
+  name: string;
+  email: string;
+  phone?: string;
+  linkedin?: string;
+  notes?: string;
+}) {
+  const user = await requireOutreachAccess();
+
+  const prospect = await createProspect({
+    ...data,
+    ownerId: user.id,
+  });
+
+  revalidateSales();
+  revalidatePath("/sales/outreach");
+  return { ok: true as const, prospect };
 }
 
 export async function updateSalesAccount(

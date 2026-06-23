@@ -7,12 +7,13 @@ import {
   ArrowLeft,
   ImagePlus,
   Paperclip,
+  Plus,
   Search,
   Send,
   X,
 } from "lucide-react";
 import { Badge, Card } from "@/components/ui";
-import { Button, Input, Select, Textarea } from "@/components/ui/forms";
+import { Modal, Button, Input, Select, Textarea } from "@/components/ui/forms";
 import {
   OUTREACH_CHANNELS,
   OUTREACH_OUTCOMES,
@@ -49,17 +50,26 @@ export function OutreachLogPanel({
   const [outcome, setOutcome] = useState<OutreachOutcome>("SENT");
   const [subject, setSubject] = useState("");
   const [notes, setNotes] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
+  const [localProspects, setLocalProspects] = useState<Prospect[]>([]);
+
+  const allProspects = useMemo(() => {
+    const byId = new Map<string, Prospect>();
+    for (const p of data.prospects) byId.set(p.id, p);
+    for (const p of localProspects) byId.set(p.id, p);
+    return Array.from(byId.values()).sort((a, b) => a.company.localeCompare(b.company));
+  }, [data.prospects, localProspects]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return data.prospects.slice(0, 12);
-    return data.prospects.filter(
+    if (!q) return allProspects.slice(0, 12);
+    return allProspects.filter(
       (p) =>
         p.company.toLowerCase().includes(q) ||
         p.name.toLowerCase().includes(q) ||
         p.contacts.some((c) => c.name.toLowerCase().includes(q))
     );
-  }, [data.prospects, search]);
+  }, [allProspects, search]);
 
   function addImages(files: FileList | null) {
     if (!files?.length) return;
@@ -75,6 +85,34 @@ export function OutreachLogPanel({
     setNotes("");
     setImages([]);
     setError(null);
+  }
+
+  function submitProspect(form: FormData) {
+    setError(null);
+    startTransition(async () => {
+      const res = await fetch("/api/outreach/prospects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company: form.get("company"),
+          name: form.get("name"),
+          email: form.get("email"),
+          phone: form.get("phone") || undefined,
+          linkedin: form.get("linkedin") || undefined,
+          notes: form.get("notes") || undefined,
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(body.error ?? "Failed to add prospect");
+        return;
+      }
+      setLocalProspects((prev) => [...prev, body.prospect]);
+      setSelected(body.prospect);
+      setSearch(body.prospect.company);
+      setAddOpen(false);
+      router.refresh();
+    });
   }
 
   function submit() {
@@ -135,7 +173,17 @@ export function OutreachLogPanel({
 
             <div className="space-y-4">
               <div>
-                <label className="mb-1.5 block text-sm text-slate-300">Prospect</label>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <label className="block text-sm text-slate-300">Prospect</label>
+                  <button
+                    type="button"
+                    onClick={() => setAddOpen(true)}
+                    className="inline-flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    New prospect
+                  </button>
+                </div>
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                   <input
@@ -188,7 +236,18 @@ export function OutreachLogPanel({
                       </button>
                     ))}
                     {filtered.length === 0 && (
-                      <p className="px-3 py-2 text-sm text-slate-500">No matching prospects.</p>
+                      <div className="px-3 py-2">
+                        <p className="text-sm text-slate-500">No matching prospects.</p>
+                        {search.trim() && (
+                          <button
+                            type="button"
+                            onClick={() => setAddOpen(true)}
+                            className="mt-2 text-sm text-cyan-400 hover:text-cyan-300"
+                          >
+                            Add &ldquo;{search.trim()}&rdquo; as new prospect
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
@@ -301,6 +360,40 @@ export function OutreachLogPanel({
           </div>
         </div>
       </div>
+
+      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add prospect" wide>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitProspect(new FormData(e.currentTarget));
+          }}
+          className="space-y-4"
+        >
+          <Input
+            label="Company"
+            name="company"
+            required
+            defaultValue={search.trim()}
+          />
+          <Input label="Contact name" name="name" required />
+          <Input label="Email" name="email" type="email" required />
+          <Input label="Phone" name="phone" />
+          <Input
+            label="LinkedIn"
+            name="linkedin"
+            placeholder="https://linkedin.com/in/..."
+          />
+          <Textarea label="Notes" name="notes" rows={3} />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => setAddOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={pending}>
+              {pending ? "Adding…" : "Add prospect"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </>
   );
 }
