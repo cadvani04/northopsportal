@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Plus, Trash2, Send } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Send, Paperclip } from "lucide-react";
 import { Badge, Card } from "@/components/ui";
 import { Modal, Button, Input, Select, Textarea } from "@/components/ui/forms";
 import {
@@ -190,6 +190,22 @@ export function SalesAccountPanel({
                 </div>
                 {touch.subject && <p className="mt-2 text-sm text-white">{touch.subject}</p>}
                 {touch.notes && <p className="mt-1 text-sm text-slate-400">{touch.notes}</p>}
+                {touch.attachments.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {touch.attachments.map((att) => (
+                      <a
+                        key={att.id}
+                        href={`/api/outreach/attachments/${att.id}/view`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300"
+                      >
+                        <Paperclip className="h-3 w-3" />
+                        {att.filename ?? "Screenshot"}
+                      </a>
+                    ))}
+                  </div>
+                )}
                 <p className="mt-2 text-xs text-slate-500">
                   {touch.owner?.name ?? "Unknown"} · {formatRelative(touch.touchedAt)}
                   {touch.contact && ` · ${touch.contact.name}`}

@@ -44,6 +44,7 @@ export async function getSalesCrmData() {
         client: { select: { id: true, company: true } },
         contact: { select: { id: true, name: true } },
         owner: { select: { id: true, name: true } },
+        attachments: { orderBy: { createdAt: "asc" } },
       },
       orderBy: { touchedAt: "desc" },
       take: 50,
@@ -107,6 +108,7 @@ export async function getSalesAccount(id: string) {
         include: {
           contact: { select: { id: true, name: true } },
           owner: { select: { id: true, name: true } },
+          attachments: { orderBy: { createdAt: "asc" } },
         },
         orderBy: { touchedAt: "desc" },
       },
@@ -136,4 +138,37 @@ export async function getOutreachQueue() {
     },
     orderBy: [{ nextFollowUp: "asc" }, { company: "asc" }],
   });
+}
+
+export async function getOutreachLogData() {
+  const [prospects, recentTouches, salesTeam] = await Promise.all([
+    db.client.findMany({
+      where: { status: { not: "internal" } },
+      select: {
+        id: true,
+        company: true,
+        name: true,
+        pipelineStage: true,
+        contacts: {
+          where: { isPrimary: true },
+          take: 1,
+          select: { id: true, name: true },
+        },
+      },
+      orderBy: { company: "asc" },
+    }),
+    db.outreachTouch.findMany({
+      include: {
+        client: { select: { id: true, company: true } },
+        contact: { select: { id: true, name: true } },
+        owner: { select: { id: true, name: true } },
+        attachments: { orderBy: { createdAt: "asc" } },
+      },
+      orderBy: { touchedAt: "desc" },
+      take: 30,
+    }),
+    getSalesTeam(),
+  ]);
+
+  return { prospects, recentTouches, salesTeam };
 }

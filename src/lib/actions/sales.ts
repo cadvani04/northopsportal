@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth/session";
 import { logActivity } from "@/lib/activity";
+import { logOutreachWithAttachments } from "@/lib/outreach/service";
 import type {
   OutreachChannel,
   OutreachOutcome,
@@ -155,10 +156,10 @@ export async function logOutreachTouch(data: {
 }) {
   const user = await requireAdmin();
 
-  const touch = await db.outreachTouch.create({
-    data: {
+  const { touch } = await logOutreachWithAttachments(
+    {
       clientId: data.clientId,
-      contactId: data.contactId || undefined,
+      contactId: data.contactId,
       channel: data.channel,
       subject: data.subject,
       notes: data.notes,
@@ -167,36 +168,8 @@ export async function logOutreachTouch(data: {
       nextFollowUp: data.nextFollowUp ? new Date(data.nextFollowUp) : undefined,
       ownerId: user.id,
     },
-  });
-
-  if (data.nextFollowUp) {
-    await db.client.update({
-      where: { id: data.clientId },
-      data: { nextFollowUp: new Date(data.nextFollowUp) },
-    });
-  }
-
-  if (data.outcome === "MEETING_BOOKED") {
-    const client = await db.client.findUnique({ where: { id: data.clientId } });
-    if (client?.pipelineStage === "COLD_OUTREACH") {
-      await db.client.update({
-        where: { id: data.clientId },
-        data: {
-          pipelineStage: "DISCOVERY",
-          status: "prospect",
-          probability: Math.min(100, client.probability + 15),
-        },
-      });
-    }
-  }
-
-  await logActivity({
-    type: "OUTREACH_LOGGED",
-    title: `Outreach logged: ${data.channel}`,
-    description: data.subject || data.notes,
-    clientId: data.clientId,
-    userId: user.id,
-  });
+    []
+  );
 
   revalidateSales();
   revalidatePath(`/sales/${data.clientId}`);

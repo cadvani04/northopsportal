@@ -18,6 +18,7 @@ import {
   Inbox,
   ChevronRight,
   TrendingUp,
+  Send,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "./logo";
@@ -25,6 +26,7 @@ import { Logo } from "./logo";
 const adminNav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/sales", label: "Sales CRM", icon: TrendingUp },
+  { href: "/sales/outreach", label: "Outreach Log", icon: Send },
   { href: "/kpis", label: "KPIs & Goals", icon: Target },
   { href: "/requests", label: "Client Requests", icon: Inbox },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },

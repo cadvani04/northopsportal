@@ -28,22 +28,37 @@ export async function uploadFile(
   file: File,
   options: { allowedTypes?: string[]; maxBytes?: number; localDir?: string }
 ) {
-  const maxBytes = options.maxBytes ?? MAX_BYTES;
-  if (file.size > maxBytes) {
-    throw new Error(`File must be ${Math.round(maxBytes / 1024 / 1024)} MB or smaller.`);
-  }
-
   const buffer = Buffer.from(await file.arrayBuffer());
+  return uploadBuffer(storagePath, buffer, file.name, {
+    ...options,
+    mimeType: file.type || undefined,
+  });
+}
+
+export async function uploadBuffer(
+  storagePath: string,
+  buffer: Buffer,
+  filename: string,
+  options: {
+    allowedTypes?: string[];
+    maxBytes?: number;
+    localDir?: string;
+    mimeType?: string;
+  }
+) {
+  const maxBytes = options.maxBytes ?? MAX_BYTES;
   if (buffer.length > maxBytes) {
     throw new Error(`File must be ${Math.round(maxBytes / 1024 / 1024)} MB or smaller.`);
   }
 
+  const mimeType = options.mimeType || guessContentType(filename);
+
   if (options.allowedTypes?.length) {
     const ok = options.allowedTypes.some(
-      (type) => file.type === type || file.name.toLowerCase().endsWith(type.replace("*", ""))
+      (type) => mimeType === type || filename.toLowerCase().endsWith(type.replace("*", ""))
     );
-    if (!ok && !options.allowedTypes.includes(file.type)) {
-      const ext = file.name.split(".").pop()?.toLowerCase();
+    if (!ok && !options.allowedTypes.includes(mimeType)) {
+      const ext = filename.split(".").pop()?.toLowerCase();
       const allowedExt = options.allowedTypes.some((t) => ext && t.includes(ext));
       if (!allowedExt) {
         throw new Error("File type not allowed.");
@@ -51,12 +66,12 @@ export async function uploadFile(
     }
   }
 
-  const filename = file.name.replace(/[^\w.\-]+/g, "_") || "file";
+  const safeName = filename.replace(/[^\w.\-]+/g, "_") || "file";
 
   if (isBlobStorageAvailable()) {
-    const blob = await put(`${storagePath}/${filename}`, buffer, {
+    const blob = await put(`${storagePath}/${safeName}`, buffer, {
       access: "private",
-      contentType: file.type || "application/octet-stream",
+      contentType: mimeType || "application/octet-stream",
       addRandomSuffix: true,
     });
     return blob.url;
@@ -70,7 +85,7 @@ export async function uploadFile(
 
   const localDir = path.join(process.cwd(), "public", options.localDir || "uploads");
   await mkdir(localDir, { recursive: true });
-  const localName = `${Date.now()}-${filename}`;
+  const localName = `${Date.now()}-${safeName}`;
   await writeFile(path.join(localDir, localName), buffer);
   return `/${options.localDir || "uploads"}/${localName}`;
 }

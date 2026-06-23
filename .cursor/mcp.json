@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "northops-outreach": {
+      "command": "npm",
+      "args": ["run", "start"],
+      "cwd": "/Users/curranadvani/Desktop/dashboardpt2/mcp/outreach"
+    }
+  }
+}

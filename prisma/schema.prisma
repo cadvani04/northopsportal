@@ -196,6 +196,18 @@ model OutreachTouch {
   owner        User?           @relation(fields: [ownerId], references: [id])
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
+
+  attachments OutreachAttachment[]
+}
+
+model OutreachAttachment {
+  id              String        @id @default(cuid())
+  outreachTouchId String
+  outreachTouch   OutreachTouch @relation(fields: [outreachTouchId], references: [id], onDelete: Cascade)
+  url             String
+  filename        String?
+  mimeType        String?
+  createdAt       DateTime      @default(now())
 }
 
 model Project {
