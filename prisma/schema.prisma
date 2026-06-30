@@ -111,15 +111,16 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  assignedTasks   Task[]          @relation("TaskAssignee")
-  createdTasks    Task[]          @relation("TaskCreator")
-  expenses        Expense[]
-  activities      ActivityLog[]
-  notifications   Notification[]
-  clientRequests  ClientRequest[] @relation("RequestSubmitter")
-  routedRequests  ClientRequest[] @relation("RequestAssignee")
-  ownedClients    Client[]        @relation("ClientOwner")
-  outreachTouches OutreachTouch[]
+  assignedTasks      Task[]             @relation("TaskAssignee")
+  createdTasks       Task[]             @relation("TaskCreator")
+  expenses           Expense[]
+  activities         ActivityLog[]
+  notifications      Notification[]
+  clientRequests     ClientRequest[]    @relation("RequestSubmitter")
+  routedRequests     ClientRequest[]    @relation("RequestAssignee")
+  ownedClients       Client[]           @relation("ClientOwner")
+  outreachTouches    OutreachTouch[]
+  outreachTemplates  OutreachTemplate[]
 }
 
 model Notification {
@@ -397,4 +398,16 @@ model KpiGoal {
   endDate     DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+}
+
+model OutreachTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  body        String
+  count       Int      @default(0)
+  goal        Int      @default(50)
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

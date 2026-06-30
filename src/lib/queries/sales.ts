@@ -140,6 +140,13 @@ export async function getOutreachQueue() {
   });
 }
 
+export async function getOutreachTemplates() {
+  return db.outreachTemplate.findMany({
+    include: { createdBy: { select: { id: true, name: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
 export async function getOutreachLogData() {
   const [prospects, recentTouches, salesTeam] = await Promise.all([
     db.client.findMany({

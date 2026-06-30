@@ -19,6 +19,7 @@ import {
   ChevronRight,
   TrendingUp,
   Send,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "./logo";
@@ -27,6 +28,7 @@ const adminNav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/sales", label: "Sales CRM", icon: TrendingUp },
   { href: "/sales/outreach", label: "Outreach Log", icon: Send },
+  { href: "/sales/outreach-templates", label: "Outreach Templates", icon: MessageSquare },
   { href: "/kpis", label: "KPIs & Goals", icon: Target },
   { href: "/requests", label: "Client Requests", icon: Inbox },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
@@ -42,6 +44,7 @@ const adminNav = [
 
 const internNav = [
   { href: "/sales/outreach", label: "Outreach Log", icon: Send },
+  { href: "/sales/outreach-templates", label: "Outreach Templates", icon: MessageSquare },
 ];
 
 const clientNav = [
